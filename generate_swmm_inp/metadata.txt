@@ -1,0 +1,56 @@
+# This file contains metadata for your plugin.
+
+# This file should be included when you package your plugin.# Mandatory items:
+
+[general]
+name=Generate SWMM inp
+qgisMinimumVersion=3.30
+description= Generate SWMM input files from layers, import input files from SWMM to QGIS and import SWMM report files to QGIS
+version=0.40
+author=Jannik Schilling
+email=jannik.schilling@posteo.de
+
+about=This plugin provides tools to generate SWMM input files from layers in QGIS, and to import SWMM input files into QGIS. You can create submodels above or below a certain node in your model layers. The plugin needs the python library 'pandas' which should be included in current QGIS versions. If it is not already installed, it can be added in a advanced QGIS installation or via pip. Instructions and a documentation can be found on the plugin´s GIT (see link "homepage" below). 
+
+	Cite as: Schilling, J.; Tränckner, J. Generate_SWMM_inp: An Open-Source QGIS Plugin to Import and Export Model Input Files for SWMM. Water 2022, 14, 2262. https://doi.org/10.3390/w14142262
+
+	First versions (0.1 to 0.31) of this plugin have been developed within the project PROSPER-RO, funded by BMBF, grant number 033L212.
+	New features and bugfixes (versions 0.32 to 0.39) have been added within the project OSWeGe, funded by BMUV, grant number 67DAS263
+
+tracker=https://github.com/Jannik-Schilling/generate_swmm_inp/issues
+repository=https://github.com/Jannik-Schilling/generate_swmm_inp
+# End of mandatory metadata
+
+# Recommended items:
+
+hasProcessingProvider=yes
+# Uncomment the following line and add your changelog:
+changelog= 0.40
+        - visual enhancement of inner rings in subcatchments thanks to MatthiasWebering
+	- Since version 0.34: replacement of column "Shape" by "XsectShape" in conduits layers and orifices layers because of issues with ESRI-Shapefiles. Currently, a deprecation warning will appear and the tools will still work with old SWMM layers. However it is recommended to apply these changes from now on.
+
+
+
+# Tags are comma separated with spaces allowed
+tags=swmm, water, modelling, flow, sewer, wastewater, river
+
+homepage=https://github.com/Jannik-Schilling/generate_swmm_inp
+category=Analysis
+icon=icons/icon.png
+# experimental flag
+experimental=False
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+
+# Since QGIS 3.8, a comma separated list of plugins to be installed
+# (or upgraded) can be specified.
+# Check the documentation for more information.
+
+
+# Category of the plugin: Raster, Vector, Database or Web
+# category=Vector
+
+# If the plugin can run on QGIS Server.
+server=False
+

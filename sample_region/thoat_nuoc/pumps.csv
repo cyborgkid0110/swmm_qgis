@@ -1,0 +1,2 @@
+﻿ID,Name,FromNode,ToNode,Position,Type,Grade,NumPumps,Cap_m3s,InElev_m,OutElev_m,AutoMonit,TrashScr,Purpose,SvcArea,IrrigSys,StreetID,Location,Province,District,Ward,Manager,YearBuilt,YearUpdate,Status,Notes,Shape
+18,Tr?m bõm An Phú,PN18_in,PN18_out,,,,,33kW,,,,,,0.0,,,"X? An Phú Tây, huy?n C? Chi",,,,,,2022,,,"{""type"": ""Point"", ""coordinates"": [106.482400700232, 11.093000003074]}"

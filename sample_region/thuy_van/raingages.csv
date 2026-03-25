@@ -1,0 +1,2 @@
+﻿ID,Name,Format,Interval,SCF,DataSource,SeriesName,StationID,RainUnits,Location,Province,District,Ward,Manager,YearBuilt,YearUpdate,Status,Notes,Shape
+1,RG_CuChi,VOLUME,1:00,1.0,TIMESERIES,TS_CuChi,CuChi_01,MM,"Xã An Phú, huyện Củ Chi",,Củ Chi,An Phú,,,2023,,,"{""type"": ""Point"", ""coordinates"": [106.495, 11.12]}"
