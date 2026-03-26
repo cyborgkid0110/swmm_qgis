@@ -184,7 +184,7 @@ def _convert_line(csv_path, out_dir, name, fields, geom_col="RouteShape"):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class RiverLakeCanalNetwork:
-    """Data group 2 - rivers, canals, lakes, dams."""
+    """Data group 2 - rivers, canals, lakes, Mekong dams."""
 
     # ── 2.1 Rivers ────────────────────────────────────────────────────────────
     @staticmethod
@@ -288,41 +288,7 @@ class RiverLakeCanalNetwork:
             ],
         )
 
-    # ── 2.4a CONGDAP (hydraulic structures) ───────────────────────────────────
-    @staticmethod
-    def convert_congdap(csv_path, out_dir):
-        print("\n[Type 2] CONGDAP")
-        _convert_point(
-            csv_path=csv_path,
-            out_dir=out_dir,
-            name="congdap",
-            fields=[
-                ("ID",         "ID",         ogr.OFTInteger, 10),
-                ("Name",       "Name",       ogr.OFTString,  150),
-                ("Type",       "Type",       ogr.OFTString,  60),
-                ("Form",       "Form",       ogr.OFTString,  60),
-                ("Chainage",   "Chainage",   ogr.OFTString,  40),
-                ("Length_m",   "Length_m",    ogr.OFTReal,    10),
-                ("Width_m",    "Width_m",    ogr.OFTReal,    10),
-                ("Height_m",   "Height_m",   ogr.OFTReal,    10),
-                ("Diam_m",     "Diam_m",     ogr.OFTReal,    10),
-                ("Openings",   "Openings",   ogr.OFTInteger, 5),
-                ("InvElev_m",  "InvElev_m",  ogr.OFTReal,    10),
-                ("CrestElv",   "CrestElv",   ogr.OFTReal,    10),
-                ("Grade",      "Grade",      ogr.OFTString,  10),
-                ("Operation",  "Operation",  ogr.OFTString,  60),
-                ("Purpose",    "Purpose",    ogr.OFTString,  100),
-                ("SvcArea",    "SvcArea",    ogr.OFTReal,    12),
-                ("IrrigSys",   "IrrigSys",   ogr.OFTString,  120),
-                ("Location",   "Location",   ogr.OFTString,  120),
-                ("Manager",    "Manager",    ogr.OFTString,  80),
-                ("YearBuilt",  "YearBuilt",  ogr.OFTInteger, 5),
-                ("YearUpdate", "YearUpdate", ogr.OFTInteger, 5),
-                ("Notes",      "Notes",      ogr.OFTString,  254),
-            ],
-        )
-
-    # ── 2.4b Mekong Dams ─────────────────────────────────────────────────────
+    # ── 2.4 Mekong Dams ──────────────────────────────────────────────────────
     @staticmethod
     def convert_mekong_dams(csv_path, out_dir):
         print("\n[Type 2] Mekong Dams")
@@ -358,7 +324,7 @@ class RiverLakeCanalNetwork:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class UrbanDrainageSystem:
-    """Data group 3 - sewer conduits, manholes, pumps, outlets, orifices."""
+    """Data group 3 - sewer conduits, manholes, pumps, weirs, orifices."""
 
     # ── 3.1 Sewer Network ─────────────────────────────────────────────────────
     @staticmethod
@@ -430,9 +396,8 @@ class UrbanDrainageSystem:
             fields=[
                 ("ID",         "ID",         ogr.OFTInteger, 10),
                 ("Name",       "Name",       ogr.OFTString,  150),
-                ("FromNode",   "FromNode",   ogr.OFTString,  20),
-                ("ToNode",     "ToNode",     ogr.OFTString,  20),
-                ("Position",   "Position",   ogr.OFTString,  80),
+                ("Source",     "Source",     ogr.OFTString,  80),
+                ("SewerLine",  "SewerLine",  ogr.OFTString,  80),
                 ("Type",       "Type",       ogr.OFTString,  30),
                 ("Cap_m3s",    "Cap_m3s",    ogr.OFTString,  30),
                 ("Purpose",    "Purpose",    ogr.OFTString,  100),
@@ -447,21 +412,22 @@ class UrbanDrainageSystem:
             ],
         )
 
-    # ── 3.4 Outlets / Outfalls ────────────────────────────────────────────────
+    # ── 3.4 Weirs / Water Regulating Culverts ────────────────────────────────
     @staticmethod
-    def convert_outlets(csv_path, out_dir):
-        print("\n[Type 3] Outlets")
+    def convert_weirs(csv_path, out_dir):
+        print("\n[Type 3] Weirs")
         _convert_point(
             csv_path=csv_path,
             out_dir=out_dir,
-            name="outlets",
+            name="weirs",
             fields=[
                 ("ID",         "ID",         ogr.OFTInteger, 10),
                 ("Name",       "Name",       ogr.OFTString,  150),
-                ("FromNode",   "FromNode",   ogr.OFTString,  20),
-                ("ToNode",     "ToNode",     ogr.OFTString,  20),
                 ("Type",       "Type",       ogr.OFTString,  60),
                 ("Form",       "Form",       ogr.OFTString,  60),
+                ("Chainage",   "Chainage",   ogr.OFTString,  40),
+                ("River",      "River",      ogr.OFTString,  80),
+                ("Basin",      "Basin",      ogr.OFTString,  80),
                 ("Length_m",   "Length_m",    ogr.OFTReal,    10),
                 ("Width_m",    "Width_m",    ogr.OFTReal,    10),
                 ("Height_m",   "Height_m",   ogr.OFTReal,    10),
@@ -469,10 +435,15 @@ class UrbanDrainageSystem:
                 ("Openings",   "Openings",   ogr.OFTInteger, 5),
                 ("InvElev_m",  "InvElev_m",  ogr.OFTReal,    10),
                 ("CrestElv",   "CrestElv",   ogr.OFTReal,    10),
+                ("Grade",      "Grade",      ogr.OFTString,  10),
                 ("Operation",  "Operation",  ogr.OFTString,  60),
                 ("Purpose",    "Purpose",    ogr.OFTString,  100),
+                ("Receiver",   "Receiver",   ogr.OFTString,  80),
                 ("Project",    "Project",    ogr.OFTString,  200),
+                ("SvcArea",    "SvcArea",    ogr.OFTReal,    12),
+                ("IrrigSys",   "IrrigSys",   ogr.OFTString,  120),
                 ("Location",   "Location",   ogr.OFTString,  120),
+                ("Manager",    "Manager",    ogr.OFTString,  80),
                 ("YearBuilt",  "YearBuilt",  ogr.OFTInteger, 5),
                 ("YearUpdate", "YearUpdate", ogr.OFTInteger, 5),
                 ("Notes",      "Notes",      ogr.OFTString,  254),
@@ -505,12 +476,44 @@ class UrbanDrainageSystem:
                 ("SillElev",   "SillElev",   ogr.OFTString,  20),
                 ("GateMtrl",   "GateMtrl",   ogr.OFTString,  60),
                 ("GateCtrl",   "GateCtrl",   ogr.OFTString,  60),
+                ("DischCoef",  "DischCoef",  ogr.OFTReal,    10),
                 ("Purpose",    "Purpose",    ogr.OFTString,  200),
+                ("Receiver",   "Receiver",   ogr.OFTString,  80),
                 ("SvcArea",    "SvcArea",    ogr.OFTReal,    12),
                 ("Grade",      "Grade",      ogr.OFTString,  10),
                 ("Location",   "Location",   ogr.OFTString,  120),
+                ("Province",   "Province",   ogr.OFTString,  50),
+                ("District",   "District",   ogr.OFTString,  50),
+                ("Ward",       "Ward",       ogr.OFTString,  50),
+                ("Manager",    "Manager",    ogr.OFTString,  80),
                 ("YearBuilt",  "YearBuilt",  ogr.OFTInteger, 5),
                 ("YearUpdate", "YearUpdate", ogr.OFTInteger, 5),
+                ("Status",     "Status",     ogr.OFTString,  30),
+                ("Notes",      "Notes",      ogr.OFTString,  254),
+            ],
+        )
+
+    # ── 3.6 Outfalls ──────────────────────────────────────────────────────────
+    @staticmethod
+    def convert_outfalls(csv_path, out_dir):
+        print("\n[Type 3] Outfalls")
+        _convert_point(
+            csv_path=csv_path,
+            out_dir=out_dir,
+            name="outfalls",
+            fields=[
+                ("ID",         "ID",         ogr.OFTInteger, 10),
+                ("Name",       "Name",       ogr.OFTString,  150),
+                ("Type",       "Type",       ogr.OFTString,  30),
+                ("Elev_m",     "Elev_m",     ogr.OFTReal,    10),
+                ("FixedStage", "FixedStage", ogr.OFTReal,    10),
+                ("FlapGate",   "FlapGate",   ogr.OFTString,  10),
+                ("Receiver",   "Receiver",   ogr.OFTString,  80),
+                ("SewerLine",  "SewerLine",  ogr.OFTString,  80),
+                ("Location",   "Location",   ogr.OFTString,  150),
+                ("Province",   "Province",   ogr.OFTString,  50),
+                ("District",   "District",   ogr.OFTString,  50),
+                ("Status",     "Status",     ogr.OFTString,  30),
                 ("Notes",      "Notes",      ogr.OFTString,  254),
             ],
         )
@@ -580,9 +583,6 @@ def run_all(base_dir):
     RiverLakeCanalNetwork.convert_lakes(
         _j(base_dir, rlc, "lakes.csv"),
         _j(base_dir, rlc, "lakes"))
-    RiverLakeCanalNetwork.convert_congdap(
-        _j(base_dir, rlc, "congdap.csv"),
-        _j(base_dir, rlc, "congdap"))
     RiverLakeCanalNetwork.convert_mekong_dams(
         _j(base_dir, rlc, "dams.csv"),
         _j(base_dir, rlc, "mekong_dams"))
@@ -596,12 +596,15 @@ def run_all(base_dir):
     UrbanDrainageSystem.convert_pumps(
         _j(base_dir, tn, "pumps.csv"),
         _j(base_dir, tn, "pumps"))
-    UrbanDrainageSystem.convert_outlets(
-        _j(base_dir, tn, "outlets.csv"),
-        _j(base_dir, tn, "outlets"))
+    UrbanDrainageSystem.convert_weirs(
+        _j(base_dir, tn, "weir.csv"),
+        _j(base_dir, tn, "weirs"))
     UrbanDrainageSystem.convert_orifices(
         _j(base_dir, tn, "orifices.csv"),
         _j(base_dir, tn, "orifices"))
+    UrbanDrainageSystem.convert_outfalls(
+        _j(base_dir, tn, "outfalls.csv"),
+        _j(base_dir, tn, "outfalls"))
 
     PollutionSources.convert_discharge(
         _j(base_dir, nt, "discharge.csv"),
@@ -645,9 +648,6 @@ if __name__ == "__main__":
         RiverLakeCanalNetwork.convert_lakes(
             _j(base_dir, rlc, "lakes.csv"),
             _j(base_dir, rlc, "lakes"))
-        RiverLakeCanalNetwork.convert_congdap(
-            _j(base_dir, rlc, "congdap.csv"),
-            _j(base_dir, rlc, "congdap"))
         RiverLakeCanalNetwork.convert_mekong_dams(
             _j(base_dir, rlc, "dams.csv"),
             _j(base_dir, rlc, "mekong_dams"))
@@ -661,12 +661,15 @@ if __name__ == "__main__":
         UrbanDrainageSystem.convert_pumps(
             _j(base_dir, tn, "pumps.csv"),
             _j(base_dir, tn, "pumps"))
-        UrbanDrainageSystem.convert_outlets(
-            _j(base_dir, tn, "outlets.csv"),
-            _j(base_dir, tn, "outlets"))
+        UrbanDrainageSystem.convert_weirs(
+            _j(base_dir, tn, "weir.csv"),
+            _j(base_dir, tn, "weirs"))
         UrbanDrainageSystem.convert_orifices(
             _j(base_dir, tn, "orifices.csv"),
             _j(base_dir, tn, "orifices"))
+        UrbanDrainageSystem.convert_outfalls(
+            _j(base_dir, tn, "outfalls.csv"),
+            _j(base_dir, tn, "outfalls"))
     elif type_filter == "5":
         PollutionSources.convert_discharge(
             _j(base_dir, nt, "discharge.csv"),

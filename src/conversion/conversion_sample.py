@@ -75,14 +75,13 @@ def run_sample():
     print("\n[Link layers]")
     conduits_layer, _ = conv.create_conduits()
     pumps_layer, pj = conv.create_pumps()
-    outlets_layer, olj = conv.create_outlets_layer()
     orifices_layer, orj = conv.create_orifices()
-    all_auto += pj + olj + orj
+    all_auto += pj + orj
 
     # --- Congdap spatial index ---
     print("\n[Congdap spatial index]")
     congdap_index, matched_cd_ids, _unmatched = \
-        conv._build_congdap_spatial_index(conv.congdap_csv, conv.canals_csv)
+        conv._build_congdap_spatial_index(conv.weirs_csv, conv.canals_csv)
     print(f"  Matched: {len(matched_cd_ids)} congdap -> canal segments")
     print(f"  Unmatched: {len(_unmatched)} standalone weirs")
 
@@ -124,11 +123,9 @@ def run_sample():
     print("\n[Merging auto-junctions]")
     conv._add_auto_junctions(junctions_layer, all_auto)
 
-    # --- Outfall at downstream of sample region ---
-    print("\n[Outfall]")
-    outfalls_layer = conv.create_outfalls([
-        ("OF_SR", 106.49, 10.65, 0.0, "FREE"),
-    ])
+    # --- Outfalls ---
+    print("\n[Outfalls]")
+    outfalls_layer = conv.create_outfalls()
 
     # --- DEM elevation refinement ---
     conv._refine_elevations(junctions_layer, storage_layer, outfalls_layer)
@@ -136,7 +133,7 @@ def run_sample():
     # --- Rain gages & subcatchments ---
     print("\n[Rain gages & Subcatchments]")
     raingages_layer = conv.create_raingages()
-    subcatchments_layer = conv.create_subcatchments()
+    subcatchments_layer = conv.create_subcatchments(coord_registry=coord_registry)
 
     # --- Tables ---
     print("\n[Tables]")
@@ -151,7 +148,7 @@ def run_sample():
     print("\n[QGIS project]")
     project = QgsProject.instance()
     layers = [junctions_layer, outfalls_layer, storage_layer,
-              conduits_layer, pumps_layer, outlets_layer,
+              conduits_layer, pumps_layer,
               orifices_layer, weirs_layer,
               raingages_layer, subcatchments_layer]
     for lyr in layers:
@@ -178,7 +175,7 @@ def run_sample():
             "FILE_STORAGES": storage_layer,
             "FILE_CONDUITS": conduits_layer,
             "FILE_PUMPS": pumps_layer,
-            "FILE_OUTLETS": outlets_layer,
+            "FILE_OUTLETS": conv._line_layer("outlets", []),
             "FILE_ORIFICES": orifices_layer,
             "FILE_WEIRS": weirs_layer,
             "FILE_RAINGAGES": raingages_layer,

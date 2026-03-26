@@ -5,11 +5,11 @@ Creates standardized CSVs for all components defined in docs/standardization_mod
 Components handled:
   2.1 River       - from river.shp
   2.3 Lake        - sample data (Hanoi)
-  2.4 Dam         - from CONGDAP2023 + mekongdam_database
+  2.4 Dam         - from mekongdam_database
   3.1 Sewer       - sample data (Hanoi)
   3.2 Manholes    - sample data (Hanoi)
   3.3 Pumps       - from TRAMBOM2023
-  3.4 Outlets     - from CONGDUOIDE2023
+  3.4 Weirs       - from CONGDAP2023 + CONGDUOIDE2023
   3.5 Orifices    - from CONGKIEMSOATTRIEU2023
   5.1 Pollution   - from VITRIXATHAI2022 + VITRIXATHAIVAOCTTL2023
 
@@ -206,56 +206,8 @@ def create_lakes():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 2.4 Dam / Hydraulic Structure  (CONGDAP2023 -> congdap.csv)
+# (congdap migration removed — merged into migrate_weirs() under Group 3)
 # ═════════════════════════════════════════════════════════════════════════════
-
-def migrate_congdap():
-    print("\n[2.4a] Migrating CONGDAP2023...")
-    csv_path = os.path.join(BASE,
-        "mang_luoi_song_ho_kenh_muong\\HTQLTL_CTTL_C\u1ed0NGDAP2023.csv")
-    out = os.path.join(BASE, r"mang_luoi_song_ho_kenh_muong\congdap.csv")
-
-    FIELDS = [
-        "ID", "Name", "Type", "Form", "Chainage", "River", "Basin",
-        "Length_m", "Width_m", "Height_m", "Diam_m", "Openings",
-        "InvElev_m", "CrestElv", "Cap_MW", "Vol_Mm3", "Catch_km2",
-        "Elev_m", "Grade", "Operation", "Purpose", "SvcArea",
-        "IrrigSys", "Country", "Complete",
-        "Location", "Province", "District", "Ward", "Manager",
-        "YearBuilt", "YearUpdate", "Status", "Notes", "Shape",
-    ]
-
-    MAP = {
-        "stt": "ID", "TenCongDap": "Name", "LoaiCongTrinh": "Type",
-        "HinhThuc": "Form", "LyTrinh": "Chainage",
-        "ChieuDai": "Length_m", "BeRong": "Width_m", "ChieuCao": "Height_m",
-        "DuongKinh": "Diam_m", "SoCua": "Openings",
-        "CaoTrinhDayCong": "InvElev_m", "CaoTrinhDinhCong": "CrestElv",
-        "CapCongTrinh": "Grade", "HinhThucVanHanh": "Operation",
-        "MucTieuNhiemVu": "Purpose", "DienTichPhucVu_ha": "SvcArea",
-        "HeThongCongTrinhThuyLoi": "IrrigSys",
-        "DiaDiem": "Location", "DonViQuanLy": "Manager",
-        "NamSuDung": "YearBuilt", "NamCapNhat": "YearUpdate",
-        "GhiChu": "Notes",
-    }
-
-    src = _read(csv_path)
-    rows = []
-    for r in src:
-        shape_str = r.get("Shape", "").strip()
-        coords = _gjpt(shape_str)
-        if not coords:
-            continue
-        lon, lat = coords
-        row = {f: "" for f in FIELDS}
-        row["Shape"] = _pt(lon, lat)
-        for csv_col, std_col in MAP.items():
-            val = _san(r.get(csv_col, ""))
-            if val and val != "<Null>":
-                row[std_col] = val
-        rows.append(row)
-
-    _write(out, FIELDS, rows)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -448,7 +400,7 @@ def migrate_pumps():
     out = os.path.join(BASE, r"thoat_nuoc\pumps.csv")
 
     FIELDS = [
-        "ID", "Name", "FromNode", "ToNode", "Position",
+        "ID", "Name", "Source", "SewerLine",
         "Type", "Grade", "NumPumps", "Cap_m3s",
         "InElev_m", "OutElev_m", "AutoMonit", "TrashScr",
         "Purpose", "SvcArea", "IrrigSys", "StreetID",
@@ -476,8 +428,6 @@ def migrate_pumps():
 
         row = {f: "" for f in FIELDS}
         row["Shape"] = _pt(lon, lat)
-        row["FromNode"] = f"PN{i}_in"
-        row["ToNode"] = f"PN{i}_out"
         for csv_col, std_col in MAP.items():
             val = _san(r.get(csv_col, ""))
             if val and val != "<Null>":
@@ -488,26 +438,60 @@ def migrate_pumps():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 3.4 Outlets / Outfalls  (from CONGDUOIDE2023)
+# 3.4 Weirs  (from CONGDAP2023 + CONGDUOIDE2023 -> weir.csv)
 # ═════════════════════════════════════════════════════════════════════════════
 
-def migrate_outlets():
-    print("\n[3.4] Migrating outlets (CONGDUOIDE2023)...")
-    csv_path = os.path.join(BASE,
-        r"thoat_nuoc\HTQLTL_DA1547GD1_CONGDUOIDE2023.csv")
-    out = os.path.join(BASE, r"thoat_nuoc\outlets.csv")
+def migrate_weirs():
+    print("\n[3.4] Migrating weirs (CONGDAP2023 + CONGDUOIDE2023)...")
+    out = os.path.join(BASE, r"thoat_nuoc\weir.csv")
 
     FIELDS = [
-        "ID", "Name", "FromNode", "ToNode", "Position",
-        "Type", "Form", "Size_m", "Length_m", "Width_m", "Height_m",
-        "Diam_m", "Openings", "InvElev_m", "CrestElv",
-        "DesignWL", "MaxCap_kW", "FlapType",
-        "Operation", "Purpose", "Receiver", "Project",
-        "Location", "Province", "District", "Ward", "Manager",
+        "ID", "Name", "Type", "Form", "Chainage", "River", "Basin",
+        "Length_m", "Width_m", "Height_m", "Diam_m", "Openings",
+        "InvElev_m", "CrestElv", "Grade", "Operation",
+        "Purpose", "Receiver", "Project", "SvcArea",
+        "IrrigSys", "Location", "Province", "District", "Ward", "Manager",
         "YearBuilt", "YearUpdate", "Status", "Notes", "Shape",
     ]
 
-    MAP = {
+    # --- Part 1: CONGDAP2023 (3,707 records) ---
+    CONGDAP_MAP = {
+        "stt": "ID", "TenCongDap": "Name", "LoaiCongTrinh": "Type",
+        "HinhThuc": "Form", "LyTrinh": "Chainage",
+        "ChieuDai": "Length_m", "BeRong": "Width_m", "ChieuCao": "Height_m",
+        "DuongKinh": "Diam_m", "SoCua": "Openings",
+        "CaoTrinhDayCong": "InvElev_m", "CaoTrinhDinhCong": "CrestElv",
+        "CapCongTrinh": "Grade", "HinhThucVanHanh": "Operation",
+        "MucTieuNhiemVu": "Purpose", "DienTichPhucVu_ha": "SvcArea",
+        "HeThongCongTrinhThuyLoi": "IrrigSys",
+        "DiaDiem": "Location", "DonViQuanLy": "Manager",
+        "NamSuDung": "YearBuilt", "NamCapNhat": "YearUpdate",
+        "GhiChu": "Notes",
+    }
+
+    congdap_path = os.path.join(BASE,
+        "mang_luoi_song_ho_kenh_muong\\HTQLTL_CTTL_C\u1ed0NGDAP2023.csv")
+    rows = []
+
+    if os.path.exists(congdap_path):
+        src = _read(congdap_path)
+        for r in src:
+            shape_str = r.get("Shape", "").strip()
+            coords = _gjpt(shape_str)
+            if not coords:
+                continue
+            lon, lat = coords
+            row = {f: "" for f in FIELDS}
+            row["Shape"] = _pt(lon, lat)
+            for csv_col, std_col in CONGDAP_MAP.items():
+                val = _san(r.get(csv_col, ""))
+                if val and val != "<Null>":
+                    row[std_col] = val
+            rows.append(row)
+        print(f"  CONGDAP2023: {len(rows)} records")
+
+    # --- Part 2: CONGDUOIDE2023 (43 records) ---
+    OUTLETS_MAP = {
         "stt_id": "ID", "TenCongDap": "Name",
         "LoaiCongTrinh": "Type", "HinhThuc": "Form",
         "ChieuDai": "Length_m", "DuongKinh": "Diam_m",
@@ -520,25 +504,38 @@ def migrate_outlets():
         "GhiChu": "Notes",
     }
 
-    src = _read(csv_path)
-    rows = []
-    for i, r in enumerate(src, 1):
-        shape_str = r.get("Shape", "").strip()
-        coords = _gjpt(shape_str)
-        if not coords:
-            continue
-        lon, lat = coords
+    outlets_path = os.path.join(BASE,
+        r"thoat_nuoc\HTQLTL_DA1547GD1_CONGDUOIDE2023.csv")
+    n_outlets = 0
 
-        row = {f: "" for f in FIELDS}
-        row["Shape"] = _pt(lon, lat)
-        row["FromNode"] = f"OL{i}_up"
-        row["ToNode"] = f"OL{i}_out"
-        for csv_col, std_col in MAP.items():
-            val = _san(r.get(csv_col, ""))
-            if val and val != "<Null>":
-                row[std_col] = val
-        rows.append(row)
+    if os.path.exists(outlets_path):
+        src = _read(outlets_path)
+        # Continue ID numbering from congdap
+        next_id = max((int(r.get("ID", 0) or 0) for r in rows), default=0) + 1
+        for r in src:
+            shape_str = r.get("Shape", "").strip()
+            coords = _gjpt(shape_str)
+            if not coords:
+                continue
+            lon, lat = coords
+            row = {f: "" for f in FIELDS}
+            row["Shape"] = _pt(lon, lat)
+            row["ID"] = next_id
+            next_id += 1
+            for csv_col, std_col in OUTLETS_MAP.items():
+                if std_col == "ID":
+                    continue  # use sequential ID
+                val = _san(r.get(csv_col, ""))
+                if val and val != "<Null>":
+                    row[std_col] = val
+            # Default type for outlets records
+            if not row["Type"]:
+                row["Type"] = "Cong duoi de"
+            rows.append(row)
+            n_outlets += 1
+        print(f"  CONGDUOIDE2023: {n_outlets} records")
 
+    print(f"  Total merged: {len(rows)} records")
     _write(out, FIELDS, rows)
 
 
@@ -557,7 +554,7 @@ def migrate_orifices():
         "Type", "Form", "Length_m", "Width_m", "Height_m",
         "Openings", "InvElev_m", "CrestElv",
         "DischCoef", "ClearSpan", "SillElev", "GateMtrl", "GateCtrl",
-        "Purpose", "SvcArea", "Grade",
+        "Purpose", "Receiver", "SvcArea", "Grade",
         "Location", "Province", "District", "Ward", "Manager",
         "YearBuilt", "YearUpdate", "Status", "Notes", "Shape",
     ]
@@ -708,12 +705,11 @@ if __name__ == "__main__":
 
     migrate_rivers()
     create_lakes()
-    migrate_congdap()
     migrate_mekong_dams()
     create_sewers()
     create_manholes()
     migrate_pumps()
-    migrate_outlets()
+    migrate_weirs()
     migrate_orifices()
     migrate_discharge_2022()
     migrate_discharge_2023()

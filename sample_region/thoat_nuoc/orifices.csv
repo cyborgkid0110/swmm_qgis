@@ -1,1 +1,7 @@
-﻿ID,Name,FromNode,ToNode,Position,Type,Form,Length_m,Width_m,Height_m,Openings,InvElev_m,CrestElv,DischCoef,ClearSpan,SillElev,GateMtrl,GateCtrl,Purpose,SvcArea,Grade,Location,Province,District,Ward,Manager,YearBuilt,YearUpdate,Status,Notes,Shape
+﻿ID,Name,FromNode,ToNode,Position,Type,Form,Length_m,Width_m,Height_m,Openings,InvElev_m,CrestElv,DischCoef,ClearSpan,SillElev,GateMtrl,GateCtrl,Purpose,Receiver,SvcArea,Grade,Location,Province,District,Ward,Manager,YearBuilt,YearUpdate,Status,Notes,Shape
+1,Cualo_1,,,,,,,3.0,3.0,1,,,,,,,,,Lake_1,0.5,,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.5037381391376, 11.134305229546348]}"
+2,Cualo_2,,,,,,,3.0,3.0,1,,,,,,,,,Lake_1,0.5,,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.50291428498794, 11.13375002348899]}"
+3,Cualo_3,,,,,,,3.0,3.0,1,,,,,,,,,Lake_1,0.5,,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.50496317443833, 11.133080194245592]}"
+4,Cualo_4,,,,,,,3.0,3.0,1,,,,,,,,,Lake_1,0.5,,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.50403544302635, 11.132915423415666]}"
+5,Cualo_5,,,,,,,3.0,3.0,2,,,,,,,,,K?nh T5-2,0.5,,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.505570586622, 11.136248073583]}"
+6,Cualo_6,,,,,,,3.0,3.0,1,,,,,,,,,K?nh T7-3,0.5,,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.494209718032, 11.137902316856]}"

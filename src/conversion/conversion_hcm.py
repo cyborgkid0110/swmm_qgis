@@ -74,14 +74,13 @@ def run_hcm():
     print("\n[Link layers]")
     conduits_layer, _ = conv.create_conduits()
     pumps_layer, pj = conv.create_pumps()
-    outlets_layer, olj = conv.create_outlets_layer()
     orifices_layer, orj = conv.create_orifices()
-    all_auto += pj + olj + orj
+    all_auto += pj + orj
 
     # --- Congdap spatial index ---
     print("\n[Congdap spatial index]")
     congdap_index, matched_cd_ids, _unmatched = \
-        conv._build_congdap_spatial_index(conv.congdap_csv, conv.canals_csv)
+        conv._build_congdap_spatial_index(conv.weirs_csv, conv.canals_csv)
     print(f"  Matched: {len(matched_cd_ids)} congdap -> canal segments")
     print(f"  Unmatched: {len(_unmatched)} standalone weirs")
 
@@ -123,11 +122,9 @@ def run_hcm():
     print("\n[Merging auto-junctions]")
     conv._add_auto_junctions(junctions_layer, all_auto)
 
-    # --- Outfall at downstream HCM (Saigon River area) ---
-    print("\n[Outfall]")
-    outfalls_layer = conv.create_outfalls([
-        ("OF_HCM", 106.700, 10.730, 0.0, "FREE"),
-    ])
+    # --- Outfalls ---
+    print("\n[Outfalls]")
+    outfalls_layer = conv.create_outfalls()
 
     # --- DEM elevation refinement ---
     conv._refine_elevations(junctions_layer, storage_layer, outfalls_layer)
@@ -142,7 +139,7 @@ def run_hcm():
     print("\n[QGIS project]")
     project = QgsProject.instance()
     layers = [junctions_layer, outfalls_layer, storage_layer,
-              conduits_layer, pumps_layer, outlets_layer,
+              conduits_layer, pumps_layer,
               orifices_layer, weirs_layer]
     for lyr in layers:
         project.addMapLayer(lyr)
@@ -168,7 +165,7 @@ def run_hcm():
             "FILE_STORAGES": storage_layer,
             "FILE_CONDUITS": conduits_layer,
             "FILE_PUMPS": pumps_layer,
-            "FILE_OUTLETS": outlets_layer,
+            "FILE_OUTLETS": conv._line_layer("outlets", []),
             "FILE_ORIFICES": orifices_layer,
             "FILE_WEIRS": weirs_layer,
             "FILE_OPTIONS": options_path,

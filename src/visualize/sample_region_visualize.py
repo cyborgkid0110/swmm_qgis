@@ -1,5 +1,5 @@
 """
-Visualize sample region: canals + rivers + congdap + pumps + raingages + subcatchments
+Visualize sample region: canals + rivers + weirs + pumps + raingages + subcatchments
 on satellite basemap.
 Run with: conda run -n qgis-env python src/visualize/sample_region_visualize.py
 """
@@ -20,7 +20,7 @@ SAMPLE_DIR = os.path.join(REPO_DIR, "sample_region")
 
 CANALS_CSV  = os.path.join(SAMPLE_DIR, "mang_luoi_song_ho_kenh_muong", "canals.csv")
 RIVERS_CSV  = os.path.join(SAMPLE_DIR, "mang_luoi_song_ho_kenh_muong", "rivers.csv")
-CONGDAP_CSV = os.path.join(SAMPLE_DIR, "mang_luoi_song_ho_kenh_muong", "congdap.csv")
+WEIRS_CSV   = os.path.join(SAMPLE_DIR, "thoat_nuoc", "weir.csv")
 PUMPS_CSV   = os.path.join(SAMPLE_DIR, "thoat_nuoc", "pumps.csv")
 RAINGAGES_CSV = os.path.join(SAMPLE_DIR, "thuy_van", "raingages.csv")
 SUBCATCH_CSV  = os.path.join(SAMPLE_DIR, "dia_hinh_khong_gian", "subcatchments.csv")
@@ -78,12 +78,12 @@ def load_polygons(csv_path, shape_col="Shape"):
 print("Loading sample region data...")
 canals = load_linestrings(CANALS_CSV)
 rivers = load_linestrings(RIVERS_CSV)
-congdap = load_points(CONGDAP_CSV)
+weirs = load_points(WEIRS_CSV)
 pumps = load_points(PUMPS_CSV)
 raingages = load_points(RAINGAGES_CSV)
 subcatchments = load_polygons(SUBCATCH_CSV)
 print(f"  Canals: {len(canals)}, Rivers: {len(rivers)}, "
-      f"Congdap: {len(congdap)}, Pumps: {len(pumps)}, "
+      f"Weirs: {len(weirs)}, Pumps: {len(pumps)}, "
       f"Raingages: {len(raingages)}, Subcatchments: {len(subcatchments)}")
 
 
@@ -97,7 +97,7 @@ def canal_color(row):
     return "#ffaa00"       # other = amber
 
 
-def congdap_color(row):
+def weirs_color(row):
     s = (row.get("Type") or "").lower()
     if "u ti" in s:
         return "#ff4444"     # regulation = red
@@ -166,11 +166,11 @@ for coords, row in canals:
     all_lons.extend(xs)
     all_lats.extend(ys)
 
-# -- Draw congdap (points) ----------------------------------------------------
-if congdap:
-    cd_lons = [p[0] for p in congdap]
-    cd_lats = [p[1] for p in congdap]
-    cd_colors = [congdap_color(p[2]) for p in congdap]
+# -- Draw weirs (points) ----------------------------------------------------
+if weirs:
+    cd_lons = [p[0] for p in weirs]
+    cd_lats = [p[1] for p in weirs]
+    cd_colors = [weirs_color(p[2]) for p in weirs]
     ax.scatter(cd_lons, cd_lats, c=cd_colors, s=6, alpha=0.9,
               edgecolors="white", linewidths=0.2, zorder=6)
     all_lons.extend(cd_lons)
@@ -222,7 +222,7 @@ ax.set_xlabel("Longitude", color="#cccccc", fontsize=10)
 ax.set_ylabel("Latitude", color="#cccccc", fontsize=10)
 ax.set_title(
     f"Sample Region - {len(canals)} Canals, {len(rivers)} Rivers, "
-    f"{len(congdap)} Structures, {len(pumps)} Pumps, "
+    f"{len(weirs)} Structures, {len(pumps)} Pumps, "
     f"{len(raingages)} Raingages, {len(subcatchments)} Subcatchments",
     color="#ffffff", fontsize=12, fontweight="bold", pad=12,
 )
@@ -237,7 +237,7 @@ handles = [
                   label=f"Canal - Drainage ({sum(1 for _, r in canals if 'tieu' in (r.get('Purpose') or '').lower())})"),
     mlines.Line2D([], [], color="#ffaa00", linewidth=1.5,
                   label="Canal - Other"),
-    # congdap
+    # weirs
     mlines.Line2D([], [], marker="o", color="#ff4444", linestyle="None",
                   markersize=5, label="Regulation gate"),
     mlines.Line2D([], [], marker="o", color="#44aaff", linestyle="None",

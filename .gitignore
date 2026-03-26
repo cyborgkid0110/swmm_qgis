@@ -9,12 +9,14 @@ __pycache__/
 # Outputs
 result/
 dataset/
+sample_region_qgis/
 
 # Coding agents
 .claude/
 CLAUDE.md
 AGENTS.md
 PLAN.md
+LOGS.md
 
 # Distribution / packaging
 .Python
@@ -92,3 +94,4 @@ cython_debug/
 # OS files
 .DS_Store
 Thumbs.db
+.gitnexus

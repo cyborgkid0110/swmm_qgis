@@ -18,6 +18,10 @@ from osgeo import ogr, osr
 
 ogr.UseExceptions()
 
+# Force UTF-8 encoding for Shapefiles (default is ISO-8859-1)
+from osgeo import gdal
+gdal.SetConfigOption("SHAPE_ENCODING", "UTF-8")
+
 REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
@@ -293,12 +297,12 @@ class CsvToShp:
             os.path.join(self.dst_dir, "mang_luoi_song_ho_kenh_muong", "rivers"),
             "rivers")
 
-    def convert_congdap(self):
-        """Congdap/weirs CSV -> Point Shapefile."""
+    def convert_weirs(self):
+        """Weirs CSV -> Point Shapefile."""
         return self._convert_points(
-            os.path.join(self.src_dir, "mang_luoi_song_ho_kenh_muong", "congdap.csv"),
-            os.path.join(self.dst_dir, "mang_luoi_song_ho_kenh_muong", "congdap"),
-            "congdap")
+            os.path.join(self.src_dir, "thoat_nuoc", "weir.csv"),
+            os.path.join(self.dst_dir, "thoat_nuoc", "weirs"),
+            "weirs")
 
     def convert_lakes(self):
         """Lakes CSV -> Point Shapefile."""
@@ -328,19 +332,19 @@ class CsvToShp:
             os.path.join(self.dst_dir, "thoat_nuoc", "pumps"),
             "pumps")
 
-    def convert_outlets(self):
-        """Outlets CSV -> Point Shapefile."""
-        return self._convert_points(
-            os.path.join(self.src_dir, "thoat_nuoc", "outlets.csv"),
-            os.path.join(self.dst_dir, "thoat_nuoc", "outlets"),
-            "outlets")
-
     def convert_orifices(self):
         """Orifices CSV -> Point Shapefile."""
         return self._convert_points(
             os.path.join(self.src_dir, "thoat_nuoc", "orifices.csv"),
             os.path.join(self.dst_dir, "thoat_nuoc", "orifices"),
             "orifices")
+
+    def convert_outfalls(self):
+        """Outfalls CSV -> Point Shapefile."""
+        return self._convert_points(
+            os.path.join(self.src_dir, "thoat_nuoc", "outfalls.csv"),
+            os.path.join(self.dst_dir, "thoat_nuoc", "outfalls"),
+            "outfalls")
 
     def convert_raingages(self):
         """Rain gages CSV -> Point Shapefile."""
@@ -375,15 +379,15 @@ class CsvToShp:
         print("\n[Group 2: River/Lake/Canal Network]")
         total += self.convert_canals()
         total += self.convert_rivers()
-        total += self.convert_congdap()
         total += self.convert_lakes()
 
         print("\n[Group 3: Urban Drainage System]")
         total += self.convert_sewers()
         total += self.convert_manholes()
         total += self.convert_pumps()
-        total += self.convert_outlets()
+        total += self.convert_weirs()
         total += self.convert_orifices()
+        total += self.convert_outfalls()
 
         print("\n[Group 4: Hydrology]")
         total += self.convert_raingages()

@@ -1,5 +1,5 @@
 """
-Visualize HCM canal network + hydraulic structures (congdap) on the same map
+Visualize HCM canal network + hydraulic structures (weirs) on the same map
 with OpenStreetMap basemap background.
 Run with: conda run -n qgis-env python src/visualize/hcm_network_visualize.py
 """
@@ -16,8 +16,8 @@ import csv
 import json
 
 CANAL_SHP   = r"g:\workspace\github\swmm\dataset\mang_luoi_song_ho_kenh_muong\canals\canals.shp"
-CONGDAP_CSV = r"g:\workspace\github\swmm\dataset\mang_luoi_song_ho_kenh_muong\congdap.csv"
-OUT_PNG     = r"g:\workspace\github\swmm\result\visualization\hcm_canals_congdap.png"
+WEIRS_CSV   = r"g:\workspace\github\swmm\dataset\thoat_nuoc\weir.csv"
+OUT_PNG     = r"g:\workspace\github\swmm\result\visualization\hcm_canals_weirs.png"
 
 
 def _sanitize(text):
@@ -53,23 +53,23 @@ ds = None
 print(f"  {len(canals)} canal features")
 
 
-# == Load congdap (from CSV for correct Vietnamese encoding) ===================
-print("Loading congdap...")
-congdap = []
-with open(CONGDAP_CSV, encoding="utf-8-sig") as f:
+# == Load weirs (from CSV for correct Vietnamese encoding) ===================
+print("Loading weirs...")
+weirs = []
+with open(WEIRS_CSV, encoding="utf-8-sig") as f:
     for row in csv.DictReader(f):
         try:
             g = json.loads(row.get("Shape", ""))
             if g["type"] != "Point":
                 continue
-            congdap.append({
+            weirs.append({
                 "lon": g["coordinates"][0],
                 "lat": g["coordinates"][1],
                 "type": row.get("Type", ""),
             })
         except Exception:
             continue
-print(f"  {len(congdap)} congdap features")
+print(f"  {len(weirs)} weirs features")
 
 
 # == Colour helpers ============================================================
@@ -82,7 +82,7 @@ def canal_color(purpose):
     return "#f39c12"       # other = orange
 
 
-def congdap_color(stype):
+def weirs_color(stype):
     """Categorize by Type field (Vietnamese, from CSV with proper encoding).
 
     Major types:
@@ -130,10 +130,10 @@ for c in canals:
         ys = [p[1] for p in pts]
         ax.plot(xs, ys, color=color, linewidth=0.4, alpha=0.8, zorder=2)
 
-# -- Draw congdap (top layer, small points) ------------------------------------
-cd_lons = [p["lon"] for p in congdap]
-cd_lats = [p["lat"] for p in congdap]
-cd_colors = [congdap_color(p["type"]) for p in congdap]
+# -- Draw weirs (top layer, small points) ------------------------------------
+cd_lons = [p["lon"] for p in weirs]
+cd_lats = [p["lat"] for p in weirs]
+cd_colors = [weirs_color(p["type"]) for p in weirs]
 
 ax.scatter(cd_lons, cd_lats, c=cd_colors, s=2, alpha=0.8,
            edgecolors="none", zorder=5)
@@ -160,7 +160,7 @@ print("  Basemap added")
 ax.set_xlabel("Longitude", color="#333333", fontsize=10)
 ax.set_ylabel("Latitude",  color="#333333", fontsize=10)
 ax.set_title(
-    f"HCM Canal Network ({len(canals):,}) + Hydraulic Structures ({len(congdap):,})",
+    f"HCM Canal Network ({len(canals):,}) + Hydraulic Structures ({len(weirs):,})",
     color="#111111", fontsize=15, fontweight="bold", pad=12,
 )
 
@@ -172,7 +172,7 @@ handles = [
                   label=f"Canal - Drainage ({sum(1 for c in canals if 'tieu' in c['purpose'].lower())})"),
     mlines.Line2D([], [], color="#f39c12", linewidth=1.5,
                   label="Canal - Other"),
-    # congdap (by Type)
+    # weirs (by Type)
     mlines.Line2D([], [], marker="o", color="#e74c3c", linestyle="None",
                   markersize=4, label="Regulation gate"),
     mlines.Line2D([], [], marker="o", color="#3498db", linestyle="None",
@@ -196,7 +196,7 @@ ax.legend(handles=handles, loc="upper left",
 ax.text(0.02, 0.02,
         f"CRS: EPSG:4326\n"
         f"Canals: {len(canals):,} LineStrings\n"
-        f"Structures: {len(congdap):,} Points\n"
+        f"Structures: {len(weirs):,} Points\n"
         f"Basemap: CartoDB Positron",
         transform=ax.transAxes, va="bottom", color="#333333",
         fontsize=9, bbox=dict(facecolor="#ffffffcc", edgecolor="#999", pad=5))

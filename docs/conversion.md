@@ -1,5 +1,46 @@
 # Conversion Module Documentation
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+  - [Pipeline](#pipeline)
+  - [QGIS Initialization](#qgis-initialization)
+- [Class: Conversion](#class-conversion)
+  - [Constructor](#constructor)
+  - [Class Constants](#class-constants)
+- [Static Helper Methods](#static-helper-methods)
+- [Spatial Filtering Methods](#spatial-filtering-methods)
+- [Coordinate Registry & Junction Deduplication](#coordinate-registry--junction-deduplication)
+- [QGIS Layer Factories](#qgis-layer-factories)
+- [Node Layer Creators](#node-layer-creators)
+  - [create_junctions](#create_junctionscsv_pathnone)
+  - [create_storage](#create_storagecsv_pathnone)
+  - [create_outfalls](#create_outfallscsv_pathnone)
+- [Hydrology Layer Creators](#hydrology-layer-creators)
+  - [create_raingages](#create_raingagescsv_pathnone)
+  - [create_subcatchments](#create_subcatchmentscsv_pathnone-coord_registrynone)
+- [Timeseries Table](#timeseries-table)
+- [Link Layer Creators](#link-layer-creators)
+  - [create_conduits](#create_conduitscsv_pathnone)
+  - [create_pumps](#create_pumpscsv_pathnone)
+  - [create_orifices](#create_orificescsv_pathnone)
+  - [create_weirs](#create_weirscsv_pathnone)
+- [LineString Decomposition](#linestring-decomposition)
+  - [create_canal_conduits](#create_canal_conduits)
+  - [create_river_conduits](#create_river_conduits)
+- [Congdap-Canal Integration](#congdap-canal-integration)
+- [DEM Elevation Refinement](#dem-elevation-refinement)
+- [MaxDepth Determination](#maxdepth-determination)
+- [Auto-Junction Merge](#auto-junction-merge)
+- [Options Table](#options-table)
+- [Main Orchestration: run()](#main-orchestration-run)
+- [Regional Scripts](#regional-scripts)
+- [Component Summary](#component-summary)
+- [Known Issues & Warnings](#known-issues--warnings)
+
+---
+
 ## Overview
 
 The conversion module (`src/conversion/conversion.py`) transforms standardized drainage/sewer datasets (CSV files with GeoJSON geometry) into EPA SWMM `.inp` input files. It uses the `generate_swmm_inp` QGIS plugin (v0.40, by Jannik Schilling) as the backend to serialize QGIS in-memory layers into the SWMM text format.
@@ -94,10 +135,10 @@ The constructor resolves paths to all 11 input CSV files:
 | `manholes_csv` | `thoat_nuoc/manholes.csv` | Manholes |
 | `sewers_csv` | `thoat_nuoc/sewers.csv` | Sewer conduits |
 | `pumps_csv` | `thoat_nuoc/pumps.csv` | Pumping stations |
-| `outlets_csv` | `thoat_nuoc/outlets.csv` | Outlet gates |
 | `orifices_csv` | `thoat_nuoc/orifices.csv` | Tidal gates |
+| `weirs_csv` | `thoat_nuoc/weir.csv` | Weirs (congdap + outlets merged) |
+| `outfalls_csv` | `thoat_nuoc/outfalls.csv` | Outfalls (boundary nodes) |
 | `lakes_csv` | `mang_luoi_song_ho_kenh_muong/lakes.csv` | Lakes/ponds |
-| `congdap_csv` | `mang_luoi_song_ho_kenh_muong/congdap.csv` | Hydraulic structures |
 | `rivers_csv` | `mang_luoi_song_ho_kenh_muong/rivers.csv` | River network |
 | `canals_csv` | `mang_luoi_song_ho_kenh_muong/canals.csv` | Canal network |
 | `raingages_csv` | `thuy_van/raingages.csv` | Rain gages |
@@ -186,6 +227,10 @@ Static method. Looks up `(round(lon,6), round(lat,6))` in the registry:
 
 This ensures shared endpoints between different LineString features map to the same SWMM junction.
 
+### `_find_nearest_junction(coord_registry, lon, lat)`
+
+Static method. Searches all junctions in the coordinate registry and returns `(junction_name, distance_m)` for the one closest to `(lon, lat)` using Haversine distance. Used by `create_subcatchments()` to resolve `OutletLon`/`OutletLat` coordinates to the nearest SWMM junction node.
+
 ---
 
 ## QGIS Layer Factories
@@ -231,7 +276,7 @@ Returns the QGIS field schema for SWMM CONDUITS + XSECTIONS:
 | Culvert, Shp_Trnsct, Kentry, Kexit, Kavg, FlapGate, Seepage | various | Optional fields (defaults) |
 
 ### `_link_from_point(lon, lat)`
-Creates a short (~5 m) LineString geometry from a Point coordinate. Used for point-based link components (pumps, outlets, orifices, weirs) which are modeled as SWMM links but stored as Points in the source data.
+Creates a short (~5 m) LineString geometry from a Point coordinate. Used for point-based link components (pumps, orifices, weirs) which are modeled as SWMM links but stored as Points in the source data.
 
 The line runs from `(lon, lat)` to `(lon + LINK_OFFSET, lat)`.
 
@@ -279,13 +324,25 @@ Uses flat-bottom approximation: `A(y) = Constant` (surface area independent of d
 
 **Returns**: `(layer, [])`.
 
-### `create_outfalls(entries=None)`
+### `create_outfalls(csv_path=None)`
 
-**Source**: Manual entries list (not CSV-driven)
+**Source**: `outfalls.csv`
 **SWMM section**: `[OUTFALLS]`
-**Default**: One outfall `OF01` at `(105.851, 21.022)` with elevation 4.0 m, type `FREE`.
+**Geometry**: Point (GeoJSON in `Shape` column)
 
-Each entry is `(name, lon, lat, elevation, type)`.
+Outfalls are boundary nodes where water exits the drainage system (e.g., river discharge points). Each row in the CSV becomes an OUTFALL node.
+
+**Field mapping**:
+
+| SWMM Field | Source | Default |
+|------------|--------|---------|
+| Name | `Name` (sanitized) | `OF{ID}` |
+| Elevation | `Elev_m` | 0.0 |
+| Type | `Type` | `"FREE"` |
+| FixedStage | `FixedStage` | 0.0 |
+| FlapGate | `FlapGate` | `"NO"` |
+
+Supported outfall types: `FREE` (critical depth), `NORMAL`, `FIXED` (fixed stage), `TIDAL`, `TIMESERIES`.
 
 **Returns**: `layer` (no auto-junctions tuple).
 
@@ -315,11 +372,13 @@ Each entry is `(name, lon, lat, elevation, type)`.
 
 **Returns**: `layer` (no auto-junctions).
 
-### `create_subcatchments(csv_path=None)`
+### `create_subcatchments(csv_path=None, coord_registry=None)`
 
 **Source**: `subcatchments.csv`
 **SWMM sections**: `[SUBCATCHMENTS]` + `[SUBAREAS]` + `[INFILTRATION]`
 **Geometry**: Polygon (GeoJSON in `Shape` column, outer ring used as centroid Point)
+
+**Outlet determination**: The CSV provides `OutletLon`/`OutletLat` coordinates (WGS84) for the subcatchment's drainage point. The method uses `_find_nearest_junction()` to search the `coord_registry` (populated during canal/sewer decomposition) and assigns the closest junction as the SWMM outlet node. The `SewerRoute` field is informational only and not used in the lookup.
 
 **Field mapping**:
 
@@ -327,7 +386,7 @@ Each entry is `(name, lon, lat, elevation, type)`.
 |------------|--------|---------|
 | Name | `Name` (sanitized) | — |
 | RainGage | `RainGage` | — |
-| Outlet | `Outlet` | — |
+| Outlet | nearest junction to `OutletLon`/`OutletLat` | — |
 | Area | `Area_ha` | 1.0 |
 | Imperv | `Imperv_pct` | 25.0 |
 | Width | `Width_m` | 100.0 |
@@ -435,30 +494,6 @@ All link creators return `(layer, auto_junctions)` where `auto_junctions` is a l
 
 **Auto-junctions**: 2 per pump (FromNode at point, ToNode at point + LINK_OFFSET). Both with elevation=0.0, max_depth=3.0.
 
-### `create_outlets_layer(csv_path=None)`
-
-**Source**: `outlets.csv`
-**SWMM section**: `[OUTLETS]`
-**Geometry**: Point → short LineString
-
-**Field mapping**:
-
-| SWMM Field | Source | Default |
-|------------|--------|---------|
-| Name | `Name_{ID}` | — |
-| FromNode | `FromNode` or `OL{ID}_up` | — |
-| ToNode | `ToNode` or `OL{ID}_out` | — |
-| InOffset | `InvElev_m` | 0.0 |
-| RateCurve | — | `"FUNCTIONAL/DEPTH"` |
-| Qcoeff | — | 1.0 |
-| Qexpon | — | 0.5 |
-| FlapGate | — | `"NO"` |
-| CurveName | — | `None` |
-
-**Important**: `RateCurve` must be `"FUNCTIONAL/DEPTH"` or `"FUNCTIONAL/HEAD"`, not just `"FUNCTIONAL"`. The plugin's `get_outl_curve()` checks this exact string to decide whether to return `Qcoeff` (for FUNCTIONAL types) or `CurveName`. Using `"FUNCTIONAL"` alone causes an access violation in SWMM.
-
-**Auto-junctions**: 2 per outlet, elevation=0.0, max_depth=3.0.
-
 ### `create_orifices(csv_path=None)`
 
 **Source**: `orifices.csv`
@@ -484,7 +519,7 @@ All link creators return `(layer, auto_junctions)` where `auto_junctions` is a l
 
 ### `create_weirs(csv_path=None)`
 
-**Source**: `congdap.csv`
+**Source**: `weir.csv` (merged from `congdap.csv` + `outlets.csv`)
 **SWMM section**: `[WEIRS]`
 **Geometry**: Point → short LineString
 
@@ -708,7 +743,7 @@ Junction `MaxDepth` (maximum water depth at a node) is determined from CSV data 
 | Source | Initial Elevation | MaxDepth | After DEM Refinement |
 |--------|-------------------|----------|---------------------|
 | Manholes (`create_junctions`) | `InvElev_m` (default 5.0) | `RimElev_m - InvElev_m` | `DEM - MaxDepth` |
-| Auto-junctions (pumps, outlets, orifices, weirs) | 0.0 | 3.0 (hardcoded) | `DEM - 3.0` |
+| Auto-junctions (pumps, orifices, weirs) | 0.0 | 3.0 (hardcoded) | `DEM - 3.0` |
 | Canal junctions (decomposed) | `BedElev_m` (default 0.0) | `BankElev_m - BedElev_m`, or 0.5 | `DEM - MaxDepth` |
 | River junctions (decomposed) | `BedElev_m` (default 0.0) | `BankElev_m - BedElev_m`, or 2.0 | `DEM - MaxDepth` |
 
@@ -724,7 +759,6 @@ Merges auto-generated junction nodes into the main JUNCTIONS layer. Deduplicates
 
 **Input**: List of `(name, lon, lat, elevation, max_depth)` tuples from:
 - `create_pumps()` — 2 per pump
-- `create_outlets_layer()` — 2 per outlet
 - `create_orifices()` — 2 per orifice
 - `create_weirs()` — 2 per standalone weir
 - `_decompose_linestrings()` — 1 per LineString coordinate point + 2 per inline weir
@@ -801,7 +835,7 @@ processing.run("GenSwmmInp:GenerateSwmmInpFile", {
     "FILE_STORAGES": storage_layer,
     "FILE_CONDUITS": conduits_layer,
     "FILE_PUMPS": pumps_layer,
-    "FILE_OUTLETS": outlets_layer,
+    "FILE_OUTLETS": conv._line_layer("outlets", []),
     "FILE_ORIFICES": orifices_layer,
     "FILE_WEIRS": weirs_layer,
     "FILE_RAINGAGES": raingages_layer,
@@ -828,7 +862,7 @@ Processes all 9 datasets but only includes features within the Hanoi DEM extent.
 
 ### `src/conversion/conversion_hcm.py`
 
-**Bounding box**: `(106.364036, 10.382483, 106.977959, 11.158576)` — combined extent of `canals.csv` + `congdap.csv`.
+**Bounding box**: `(106.364036, 10.382483, 106.977959, 11.158576)` — combined extent of `canals.csv` + `weir.csv`.
 
 **Outfall**: `OF_HCM` at `(106.700, 10.730)`, elevation 0.0 m, type `FREE`.
 
@@ -839,7 +873,7 @@ Processes all 9 datasets but only includes features within the HCM extent.
 **Dataset**: `sample_region/` (pre-cropped datasets, same folder structure as `dataset/`)
 **Bounding box**: `(106.46, 11.09, 106.53, 11.16)` — small HCM sub-area (Củ Chi district).
 
-No bbox filter needed — data is already cropped by `crop_sample_region.py`. Includes raingages, subcatchments, and timeseries. Result: `sample_region.inp` — 2,777 nodes + 2,677 links (655 KB), ~1s simulation.
+No bbox filter needed — data is already cropped by `crop_sample_region.py`. Includes raingages, subcatchments, timeseries, and outfalls. Result: `sample_region.inp` — 2,454 nodes + 2,334 conduits + 80 weirs + 2 outfalls (601 KB), ~16s simulation.
 
 All regional scripts follow the same orchestration logic as `run()` but are standalone (handle their own QGIS init and plugin registration).
 
@@ -853,16 +887,15 @@ All regional scripts follow the same orchestration logic as `run()` but are stan
 |------------|-------------|----------|----------------|
 | manholes.csv | [JUNCTIONS] | Point | `create_junctions()` |
 | lakes.csv | [STORAGE] | Point | `create_storage()` |
-| (manual) | [OUTFALLS] | Point | `create_outfalls()` |
+| outfalls.csv | [OUTFALLS] | Point | `create_outfalls()` |
 | sewers.csv | [CONDUITS] + [XSECTIONS] | LineString | `create_conduits()` |
 | canals.csv | [CONDUITS] + [XSECTIONS] | LineString (decomposed) | `create_canal_conduits()` |
 | rivers.csv | [CONDUITS] + [XSECTIONS] | LineString (decomposed) | `create_river_conduits()` |
 | pumps.csv | [PUMPS] | Point → LineString | `create_pumps()` |
-| outlets.csv | [OUTLETS] | Point → LineString | `create_outlets_layer()` |
 | orifices.csv | [ORIFICES] | Point → LineString | `create_orifices()` |
-| congdap.csv | [WEIRS] | Point → LineString | `create_weirs()` |
+| weir.csv | [WEIRS] | Point → LineString | `create_weirs()` |
 | raingages.csv | [RAINGAGES] | Point | `create_raingages()` |
-| subcatchments.csv | [SUBCATCHMENTS] + [SUBAREAS] + [INFILTRATION] | Polygon | `create_subcatchments()` |
+| subcatchments.csv | [SUBCATCHMENTS] + [SUBAREAS] + [INFILTRATION] | Polygon | `create_subcatchments(coord_registry=)` |
 | (generated) | [TIMESERIES] | — (table) | `create_timeseries_table()` |
 
 ### Model Scale (Full, No BBox Filter)
@@ -872,7 +905,7 @@ All regional scripts follow the same orchestration logic as `run()` but are stan
 | Manholes | 12 | JUNCTIONS |
 | Auto-junctions | ~186,920 | JUNCTIONS |
 | Lakes | 5 | STORAGE |
-| Outfalls | 1 | OUTFALLS |
+| Outfalls | 4 | OUTFALLS |
 | Sewer conduits | 12 | CONDUITS |
 | Canal segments | 82,457 | CONDUITS |
 | River segments | 107,650 | CONDUITS |
@@ -900,6 +933,6 @@ All regional scripts follow the same orchestration logic as `run()` but are stan
 
 3. **OUTLETS RateCurve**: Must use `"FUNCTIONAL/DEPTH"` not `"FUNCTIONAL"`. The plugin's `get_outl_curve()` checks this exact string. Using `"FUNCTIONAL"` alone causes SWMM access violation.
 
-4. **Point-based links**: Pumps, outlets, orifices, and weirs are stored as Point geometries but SWMM models them as links. The conversion creates a ~5m synthetic LineString via `_link_from_point()` and auto-generates FromNode/ToNode junction pairs.
+4. **Point-based links**: Pumps, orifices, and weirs are stored as Point geometries but SWMM models them as links. The conversion creates a ~5m synthetic LineString via `_link_from_point()` and auto-generates FromNode/ToNode junction pairs.
 
 5. **No DEM elevation lookup**: Junction elevations come from CSV data only. Canal/river junctions without `BedElev_m` data default to 0.0 m.

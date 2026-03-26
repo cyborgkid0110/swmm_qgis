@@ -1,5 +1,5 @@
 """
-Visualize hydraulic structures (CONGDAP2023) shapefile.
+Visualize hydraulic structures (weirs) shapefile.
 Run with: python congdap_visualize.py
 """
 import matplotlib
@@ -10,7 +10,7 @@ from osgeo import ogr
 
 ogr.UseExceptions()
 
-SHP_PATH = r"g:\workspace\github\swmm\dataset\mang_luoi_song_ho_kenh_muong\congdap\congdap.shp"
+SHP_PATH = r"g:\workspace\github\swmm\dataset\thoat_nuoc\weirs\weirs.shp"
 OUT_PNG  = r"g:\workspace\github\swmm\result\visualization\congdap_preview.png"
 
 
@@ -21,7 +21,7 @@ def _sanitize(text):
 
 
 # -- read shapefile ------------------------------------------------------------
-print("Loading congdap shapefile...")
+print("Loading weirs shapefile...")
 ds  = ogr.Open(SHP_PATH)
 lyr = ds.GetLayer(0)
 defn = lyr.GetLayerDefn()

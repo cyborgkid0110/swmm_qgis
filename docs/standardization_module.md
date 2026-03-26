@@ -1,5 +1,25 @@
 # Standardization Module
 
+## Table of Contents
+
+- [Dependencies](#dependencies)
+- [Helper Functions](#helper-functions)
+- [Classes](#classes)
+  - [RiverLakeCanalNetwork](#riverlakecanalnetwork)
+  - [UrbanDrainageSystem](#urbandrainagesystem)
+  - [PollutionSources](#pollutionsources)
+- [Command-Line Interface](#command-line-interface)
+- [Standardized CSV Dataset Schema](#standardized-csv-dataset-schema)
+  - [Common Metadata Fields](#common-metadata-fields-shared-by-all-components)
+  - [Group 1: Topography / Spatial](#group-1-topography--spatial)
+  - [Group 2: River, Lake, and Canal Network](#group-2-river-lake-and-canal-network)
+  - [Group 3: Urban Drainage System](#group-3-urban-drainage-system)
+  - [Group 5: Pollution Sources](#group-5-pollution-sources)
+- [Component Summary](#component-summary)
+- [Notes](#notes)
+
+---
+
 The `standardize.py` module converts standardized CSV datasets into ESRI Shapefiles (EPSG:4326). Each conversion method takes `csv_path` and `out_dir` as arguments — no dataset paths are hardcoded.
 
 ## Dependencies
@@ -55,7 +75,6 @@ Handles data group 2: River, Lake, and Canal Network datasets.
 | `convert_rivers(csv_path, out_dir)` | LineString | River network (2,013 features) |
 | `convert_canals(csv_path, out_dir)` | LineString | Canal/ditch network (2,271 features) |
 | `convert_lakes(csv_path, out_dir)` | Point | Lakes and detention ponds |
-| `convert_congdap(csv_path, out_dir)` | Point | Hydraulic structures (3,707 features) |
 | `convert_mekong_dams(csv_path, out_dir)` | Point | Mekong dam database (1,055 features) |
 
 ### `UrbanDrainageSystem`
@@ -67,8 +86,9 @@ Handles data group 3: Urban Drainage System datasets.
 | `convert_sewers(csv_path, out_dir)` | LineString | Sewer conduits |
 | `convert_manholes(csv_path, out_dir)` | Point | Manholes / junctions |
 | `convert_pumps(csv_path, out_dir)` | Point | Pumping stations |
-| `convert_outlets(csv_path, out_dir)` | Point | Outlets / outfalls |
+| `convert_weirs(csv_path, out_dir)` | Point | Weirs / water regulating culverts |
 | `convert_orifices(csv_path, out_dir)` | Point | Orifices / tidal control gates |
+| `convert_outfalls(csv_path, out_dir)` | Point | Outfalls / discharge points |
 
 ### `PollutionSources`
 
@@ -124,6 +144,44 @@ All standardized CSVs are created by `migrate_all.py` from raw datasets. They fo
 | `YearUpdate` | Integer | 5 | Year data was last updated | NamCapNhat |
 | `Status` | String | 30 | Operational status | Tinh trang hoat dong / Status |
 | `Notes` | String | 254 | Remarks | GhiChu |
+
+---
+
+### Group 1: Topography / Spatial
+
+#### 1.1 Subcatchment
+
+**Geometry:** Polygon | **Source datasets:** generated sample data (3 features)
+
+| Field Name | Type | Width | Description |
+|------------|------|-------|-------------|
+| `ID`* | Integer | 10 | Feature ID |
+| `Name`* | String | 150 | Subcatchment name |
+| `RainGage`* | String | 150 | Name of rain gage (references raingages.csv) |
+| `OutletLon`* | Real | 12 | Outlet point longitude (WGS84) |
+| `OutletLat`* | Real | 12 | Outlet point latitude (WGS84) |
+| `SewerRoute` | String | 150 | Name of sewer/canal route the outlet belongs to (informational) |
+| `Area_ha`* | Real | 12 | Subcatchment area (ha) |
+| `Imperv_pct` | Real | 10 | Percent impervious (%) |
+| `Width_m` | Real | 10 | Characteristic width (m) |
+| `Slope_pct` | Real | 10 | Average surface slope (%) |
+| `CurbLen_m` | Real | 10 | Curb length (m) |
+| `N_Imperv` | Real | 10 | Manning's N for impervious area |
+| `N_Perv` | Real | 10 | Manning's N for pervious area |
+| `S_Imperv_mm` | Real | 10 | Depression storage, impervious (mm) |
+| `S_Perv_mm` | Real | 10 | Depression storage, pervious (mm) |
+| `PctZero` | Real | 10 | Percent of impervious area with zero storage (%) |
+| `RouteTo` | String | 20 | Internal routing (OUTLET / IMPERVIOUS / PERVIOUS) |
+| `PctRouted` | Real | 10 | Percent routed (%) |
+| `InfMethod` | String | 30 | Infiltration method (MODIFIED_GREEN_AMPT, HORTON, etc.) |
+| `SuctHead_mm` | Real | 10 | Suction head (mm) — Green-Ampt |
+| `Conductiv_mmh` | Real | 10 | Hydraulic conductivity (mm/hr) — Green-Ampt |
+| `InitDef` | Real | 10 | Initial moisture deficit — Green-Ampt |
+| `Shape` | String | — | Polygon boundary as GeoJSON |
+
+**Notes:**
+- `OutletLon`/`OutletLat` specify the geographic coordinates of the subcatchment's drainage point. During SWMM conversion, the nearest junction in the model network is found and used as the SWMM outlet node.
+- `SewerRoute` is optional and informational — it helps identify which sewer or canal route the subcatchment drains into but is not used programmatically in the conversion.
 
 ---
 
@@ -202,37 +260,28 @@ All standardized CSVs are created by `migrate_all.py` from raw datasets. They fo
 | `Perim_m` | Real | 12 | Perimeter at crest (m) | Chu vi ung voi dinh bo ke (m) |
 | `IrrigSys` | String | 120 | Parent drainage system | Ma he thong thu gom |
 
-#### 2.4 Dam / Hydraulic Structure
+#### 2.4 Mekong Dams
 
-**Geometry:** Point | **Source datasets:** `CONGDAP2023.csv` (3,707 features), `mekongdam_database.csv` (1,055 features)
+**Geometry:** Point | **Source datasets:** `mekongdam_database.csv` (1,055 features)
 
-| Field Name | Type | Width | Description | CONGDAP | Mekong DB |
-|------------|------|-------|-------------|---------|-----------|
-| `ID`* | Integer | 10 | Feature ID | stt | ID |
-| `Name`* | String | 150 | Structure name | TenCongDap | Name1 |
-| `Type` | String | 60 | Structure type | LoaiCongTrinh | - |
-| `Form` | String | 60 | Structure form | HinhThuc | - |
-| `Chainage` | String | 40 | Chainage/station | LyTrinh | - |
-| `River` | String | 80 | River name | - | River |
-| `Basin` | String | 80 | River basin | - | Basin |
-| `Length_m` | Real | 10 | Structure length (m) | ChieuDai | Length_m |
-| `Width_m` | Real | 10 | Structure width (m) | BeRong | - |
-| `Height_m` | Real | 10 | Structure height (m) | ChieuCao | Height_m |
-| `Diam_m` | Real | 10 | Diameter (m) | DuongKinh | - |
-| `Openings` | Integer | 5 | Number of openings | SoCua | - |
-| `InvElev_m`* | Real | 10 | Invert elevation (m) | CaoTrinhDayCong | - |
-| `CrestElv` | Real | 10 | Crown/crest elevation (m) | CaoTrinhDinhCong | - |
-| `Cap_MW` | Real | 12 | Power capacity (MW) | - | Capacity_MW |
-| `Vol_Mm3` | Real | 12 | Reservoir volume (million m3) | - | Volume_milm3 |
-| `Catch_km2` | Real | 12 | Catchment area (km2) | - | Catch_km2 |
-| `Elev_m` | Real | 10 | Site elevation (m) | - | Elevation_m |
-| `Grade` | String | 10 | Infrastructure grade | CapCongTrinh | - |
-| `Operation` | String | 60 | Operation mode | HinhThucVanHanh | - |
-| `Purpose` | String | 100 | Function/purpose | MucTieuNhiemVu | Use1 |
-| `SvcArea` | Real | 12 | Service area (ha) | DienTichPhucVu_ha | Area_km2 |
-| `IrrigSys` | String | 120 | Irrigation system | HeThongCongTrinhThuyLoi | - |
-| `Country` | String | 40 | Country | - | Country |
-| `Complete` | Integer | 5 | Completion year | - | Completion |
+| Field Name | Type | Width | Description | Mekong DB |
+|------------|------|-------|-------------|-----------|
+| `ID`* | Integer | 10 | Feature ID | ID |
+| `Name`* | String | 150 | Dam name | Name1 |
+| `River` | String | 80 | River name | River |
+| `Basin` | String | 80 | River basin | Basin |
+| `Length_m` | Real | 10 | Dam length (m) | Length_m |
+| `Height_m` | Real | 10 | Dam height (m) | Height_m |
+| `Cap_MW` | Real | 12 | Power capacity (MW) | Capacity_MW |
+| `Vol_Mm3` | Real | 12 | Reservoir volume (million m3) | Volume_milm3 |
+| `Catch_km2` | Real | 12 | Catchment area (km2) | Catch_km2 |
+| `Elev_m` | Real | 10 | Site elevation (m) | Elevation_m |
+| `Purpose` | String | 100 | Function/purpose | Use1 |
+| `SvcArea` | Real | 12 | Service area (km2) | Area_km2 |
+| `Country` | String | 40 | Country | Country |
+| `Complete` | Integer | 5 | Completion year | Completion |
+
+**Note:** Mekong Dams are not converted to SWMM — they cover a different geographic region (Central/North VN highlands).
 
 ---
 
@@ -282,15 +331,14 @@ All standardized CSVs are created by `migrate_all.py` from raw datasets. They fo
 
 #### 3.3 Pumping Stations (Tram bom)
 
-**Geometry:** Line (SWMM link) | **Source datasets:** `HTQLTL_CTTL_TRAMBOM2023.csv` (23 features)
+**Geometry:** Point | **Source datasets:** `HTQLTL_CTTL_TRAMBOM2023.csv` (23 features)
 
 | Field Name | Type | Width | Description | TRAMBOM CSV | rawdata |
 |------------|------|-------|-------------|-------------|---------|
 | `ID`* | Integer | 10 | Feature ID | stt_id | Ma tram |
 | `Name`* | String | 150 | Station name | TenTramBom | Ten tram |
-| `FromNode`* | String | 20 | Upstream node ID | - | - |
-| `ToNode`* | String | 20 | Downstream node ID | - | - |
-| `Position` | String | 80 | Location description | - | - |
+| `Source` | String | 80 | Source node supplying water to pump | - | - |
+| `SewerLine` | String | 80 | Sewer route the pump supplies water to | - | - |
 | `Type` | String | 30 | Station type/classification | Loai | Ma phan loai |
 | `Grade` | String | 10 | Station grade | - | Cap tram |
 | `NumPumps` | Integer | 5 | Number of pumps | - | So luong bom |
@@ -304,34 +352,39 @@ All standardized CSVs are created by `migrate_all.py` from raw datasets. They fo
 | `IrrigSys` | String | 120 | Irrigation system | HeThongCongTrinhThuyLoi | Ma he thong thu gom |
 | `StreetID` | String | 30 | Street number | - | So hieu duong |
 
-#### 3.4 Outlets / Outfalls (Cua xa)
+#### 3.4 Weir / Water Regulating Culvert (Cong dap)
 
-**Geometry:** Line (SWMM link) | **Source datasets:** `CONGDUOIDE2023.csv` (43 features)
+**Geometry:** Point | **Source datasets:** `CỐNGDAP2023.csv` (3,707) + `CONGDUOIDE2023.csv` (43) = 3,750 features
 
-| Field Name | Type | Width | Description | CONGDUOIDE CSV | rawdata (Cua xa) |
-|------------|------|-------|-------------|----------------|------------------|
-| `ID`* | Integer | 10 | Feature ID | stt_id | Ma cua xa |
-| `Name`* | String | 150 | Outlet name | TenCongDap | Ten cua xa |
-| `FromNode`* | String | 20 | Upstream node ID | - | - |
-| `ToNode`* | String | 20 | Downstream/outfall node ID | - | - |
-| `Position` | String | 80 | Location description | - | - |
-| `Type` | String | 60 | Structure type | LoaiCongTrinh | Ma phan loai cua xa |
-| `Form` | String | 60 | Structure form | HinhThuc | - |
-| `Size_m` | String | 30 | Dimensions (m) | - | Kich thuoc (m) |
-| `Length_m` | Real | 10 | Structure length (m) | ChieuDai | - |
-| `Width_m` | Real | 10 | Width (m) | BeRong | - |
-| `Height_m` | Real | 10 | Height (m) | ChieuCao | - |
-| `Diam_m` | Real | 10 | Diameter (m) | DuongKinh | - |
-| `Openings` | Integer | 5 | Number of openings | SoCua | - |
-| `InvElev_m`* | Real | 10 | Invert elevation (m) | CaoTrinhDayCong | Cao do day cua xa (m) |
-| `CrestElv` | Real | 10 | Crown elevation (m) | CaoTrinhDinhCong | - |
-| `DesignWL` | Real | 10 | Design water level (m) | - | Cao do muc nuoc thiet ke (m) |
-| `MaxCap_kW` | Real | 10 | Max capacity (kW) | - | Cong suat toi da (kW) |
-| `FlapType` | String | 30 | Flap gate type | - | Loai cua phai |
-| `Operation` | String | 60 | Operation mode | HinhThucVanHanh | - |
-| `Purpose` | String | 100 | Function/purpose | MucTieuNhiemVu | - |
+All water regulating culverts are merged into a single `weir.csv` dataset. The `Type` field distinguishes structure types: `Cong dieu tiet`, `Cong tieu`, `Cong kenh`, `Cong qua duong`, `Cong duoi de`, `Cong kiem soat trieu`, etc.
+
+| Field Name | Type | Width | Description | CONGDAP | CONGDUOIDE |
+|------------|------|-------|-------------|---------|------------|
+| `ID`* | Integer | 10 | Feature ID | stt | stt_id |
+| `Name`* | String | 150 | Structure name | TenCongDap | TenCongDap |
+| `Type` | String | 60 | Structure type | LoaiCongTrinh | LoaiCongTrinh |
+| `Form` | String | 60 | Structure form | HinhThuc | HinhThuc |
+| `Chainage` | String | 40 | Chainage/station | LyTrinh | - |
+| `River` | String | 80 | River name | - | - |
+| `Basin` | String | 80 | River basin | - | - |
+| `Length_m` | Real | 10 | Structure length (m) | ChieuDai | ChieuDai |
+| `Width_m` | Real | 10 | Structure width (m) | BeRong | BeRong |
+| `Height_m` | Real | 10 | Structure height (m) | ChieuCao | ChieuCao |
+| `Diam_m` | Real | 10 | Diameter (m) | DuongKinh | DuongKinh |
+| `Openings` | Integer | 5 | Number of openings | SoCua | SoCua |
+| `InvElev_m`* | Real | 10 | Invert elevation (m) | CaoTrinhDayCong | CaoTrinhDayCong |
+| `CrestElv` | Real | 10 | Crown/crest elevation (m) | CaoTrinhDinhCong | CaoTrinhDinhCong |
+| `Cap_MW` | Real | 12 | Power capacity (MW) | - | - |
+| `Vol_Mm3` | Real | 12 | Reservoir volume (million m3) | - | - |
+| `Catch_km2` | Real | 12 | Catchment area (km2) | - | - |
+| `Elev_m` | Real | 10 | Site elevation (m) | - | - |
+| `Grade` | String | 10 | Infrastructure grade | CapCongTrinh | - |
+| `Operation` | String | 60 | Operation mode | HinhThucVanHanh | HinhThucVanHanh |
+| `Purpose` | String | 100 | Function/purpose | MucTieuNhiemVu | MucTieuNhiemVu |
 | `Receiver` | String | 80 | Receiving water body | - | Nguon tiep nhan |
-| `Project` | String | 200 | Parent project | CumCongTrinh | - |
+| `Project` | String | 200 | Parent project | - | CumCongTrinh |
+| `SvcArea` | Real | 12 | Service area (ha) | DienTichPhucVu_ha | - |
+| `IrrigSys` | String | 120 | Irrigation system | HeThongCongTrinhThuyLoi | - |
 
 #### 3.5 Orifices / Control Gates (Cong kiem soat trieu)
 
@@ -358,8 +411,31 @@ All standardized CSVs are created by `migrate_all.py` from raw datasets. They fo
 | `GateMtrl` | String | 60 | Gate material | CC_LoaiVatLieuCuaVan |
 | `GateCtrl` | String | 60 | Gate control mechanism | CC_KieuDongMoCuaVan |
 | `Purpose` | String | 200 | Function/purpose | MucTieuNhiemVu |
+| `Receiver` | String | 80 | Receiving water body | - |
 | `SvcArea` | Real | 12 | Service area (ha) | DienTichPhucVu_ha |
 | `Grade` | String | 10 | Infrastructure grade | CapCongTrinh |
+
+#### 3.6 Outfall / Discharge Point (Cua xa)
+
+**Geometry:** Point | **Source:** sample data (4 features) | **SWMM mapping:** [OUTFALLS] node
+
+Outfalls are boundary nodes where water exits the drainage network. In SWMM, they define boundary conditions (free discharge, fixed water level, tidal, or timeseries).
+
+| Field Name | Type | Width | Description | rawdata.csv |
+|------------|------|-------|-------------|-------------|
+| `ID`* | Integer | 10 | Feature ID | Ma cua xa |
+| `Name`* | String | 150 | Outfall name | Ten cua xa |
+| `Type` | String | 30 | SWMM outfall type (FREE/NORMAL/FIXED/TIDAL/TIMESERIES) | Ma phan loai cua xa |
+| `Elev_m` | Real | 10 | Invert elevation (m) | Cao do day cua xa (m) |
+| `FixedStage` | Real | 10 | Fixed water stage for FIXED type (m) | Cao do muc nuoc thiet ke (m) |
+| `FlapGate` | String | 10 | Has flap gate (YES/NO) | Loai cua phai |
+| `Receiver` | String | 80 | Receiving water body | Nguon tiep nhan |
+| `SewerLine` | String | 80 | Connected sewer/drainage route | Ma tuyen thoat nuoc |
+
+**Notes:**
+- `Type` defaults to `FREE` (unsubmerged critical depth). Other options: `NORMAL` (normal depth), `FIXED` (fixed stage), `TIDAL` (tidal curve), `TIMESERIES` (time series).
+- `FixedStage` is only used when `Type = FIXED`.
+- The conversion module uses `Elev_m` as the SWMM `Elevation` field. If not provided, DEM-based refinement will set the elevation.
 
 ---
 
@@ -393,20 +469,22 @@ All standardized CSVs are created by `migrate_all.py` from raw datasets. They fo
 
 | Component | Geometry | SWMM Element | Group | Current Dataset | rawdata.csv |
 |-----------|----------|--------------|-------|-----------------|-------------|
+| Subcatchment | Polygon | Subcatchment (area) | 1 | generated (3) | - |
 | River | LineString | Conduit (open channel) | 2 | river.shp (2,013) | Muong thoat nuoc |
 | Canal/Ditch | LineString | Conduit (open channel) | 2 | KENHMUONG (2,280) | Ranh thoat nuoc |
 | Lake/Pond | Point/Polygon | Storage Unit (node) | 2 | - | Ho dieu hoa |
-| Dam/Structure | Point | Weir (link) | 2 | CONGDAP (3,707) + Mekong (1,055) | - |
+| Mekong Dams | Point | — | 2 | Mekong (1,055) | - |
 | Sewer conduit | LineString | Conduit (closed) | 3 | - | Cong thoat nuoc |
 | Manhole | Point | Junction (node) | 3 | - | Ho ga |
-| Pumping station | Line | Pump (link) | 3 | TRAMBOM (23) | Tram bom thoat nuoc |
-| Outlet/Outfall | Line | Outlet (link) | 3 | CONGDUOIDE (43) | Cua xa |
-| Orifice/Gate | Line | Orifice (link) | 3 | CONGKIEMSOATTRIEU (6) | - |
+| Pumping station | Point | Pump (link) | 3 | TRAMBOM (23) | Tram bom thoat nuoc |
+| Weir/Culvert | Point | Weir (link) | 3 | CONGDAP (3,707) + CONGDUOIDE (43) | Cong dap |
+| Orifice/Gate | Point | Orifice (link) | 3 | CONGKIEMSOATTRIEU (6) | - |
+| Outfall | Point | Outfall (node) | 3 | generated (4) | Cua xa |
 | Pollution source | Point | - | 5 | VITRIXATHAI (21+29) | Nha may XLNT |
 
 ## Notes
 
-1. **EPA SWMM topology:** SWMM models a drainage network as nodes (junctions, outfalls, storage units) connected by links (conduits, pumps, orifices, outlets, weirs). All link components (3.3-3.5, plus conduits) require `FromNode`/`ToNode` fields referencing node IDs. All route components (2.1, 2.2, 3.1) use `FromNode`/`ToNode` for network connectivity, `RouteShape` for the GeoJSON LineString path geometry, and `XSType` for cross-section profile type.
+1. **EPA SWMM topology:** SWMM models a drainage network as nodes (junctions, outfalls, storage units) connected by links (conduits, pumps, orifices, weirs). All link components (3.3-3.5, plus conduits) require `FromNode`/`ToNode` fields referencing node IDs. All route components (2.1, 2.2, 3.1) use `FromNode`/`ToNode` for network connectivity, `RouteShape` for the GeoJSON LineString path geometry, and `XSType` for cross-section profile type.
 
 2. **Missing datasets:** Sewer conduits, manholes, lakes, and cross-sections have field definitions in `rawdata.csv` but no actual spatial data yet. The standardization module should have conversion methods ready for when data arrives.
 

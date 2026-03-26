@@ -1,0 +1,4 @@
+﻿ID,Name,Type,Elev_m,FixedStage,FlapGate,Receiver,SewerLine,Location,Province,District,Ward,Manager,YearBuilt,YearUpdate,Status,Notes,Shape
+3,OF_SR_Nhum,FREE,0.0,,NO,Rach Nhum,,Cu Chi HCM,Ho Chi Minh,Cu Chi,,,,,Active,Sample region - Rach Nhum exit,"{""type"": ""Point"", ""coordinates"": [106.5215, 11.09]}"
+4,OF_SR_SaiGon,FREE,0.0,,NO,Song Sai Gon,,Cu Chi HCM,Ho Chi Minh,Cu Chi,,,,,Active,Sample region - Sai Gon river entry,"{""type"": ""Point"", ""coordinates"": [106.529, 11.093]}"
+3,Outfall_3,,,,,song Sai Gon,Kênh NT4,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.52638796473778, 11.108036658175205]}"

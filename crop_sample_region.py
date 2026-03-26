@@ -144,14 +144,14 @@ def main():
         # Group 2: River/Lake/Canal Network
         ("mang_luoi_song_ho_kenh_muong", "canals.csv", "RouteShape", "LineString"),
         ("mang_luoi_song_ho_kenh_muong", "rivers.csv", "RouteShape", "LineString"),
-        ("mang_luoi_song_ho_kenh_muong", "congdap.csv", "Shape", "Point"),
+        ("thoat_nuoc", "weir.csv", "Shape", "Point"),
         ("mang_luoi_song_ho_kenh_muong", "lakes.csv", "Shape", "Point"),
         ("mang_luoi_song_ho_kenh_muong", "dams.csv", "Shape", "Point"),
         # Group 3: Urban Drainage
         ("thoat_nuoc", "manholes.csv", "Shape", "Point"),
         ("thoat_nuoc", "sewers.csv", "RouteShape", "LineString"),
         ("thoat_nuoc", "pumps.csv", "Shape", "Point"),
-        ("thoat_nuoc", "outlets.csv", "Shape", "Point"),
+        ("thoat_nuoc", "outfalls.csv", "Shape", "Point"),
         ("thoat_nuoc", "orifices.csv", "Shape", "Point"),
         # Group 4: Hydrology/Meteorology
         ("thuy_van", "raingages.csv", "Shape", "Point"),

@@ -47,9 +47,8 @@ class Conversion:
         (auto-created) → [OUTFALLS] (OF01)
         sewers.csv     → [CONDUITS]
         pumps.csv      → [PUMPS]
-        outlets.csv    → [OUTLETS]
         orifices.csv   → [ORIFICES]
-        congdap.csv    → [WEIRS]
+        weir.csv       → [WEIRS]
         rivers.csv     → [CONDUITS] (decomposed: N pts → N junctions + N-1 conduits)
         canals.csv     → [CONDUITS] (decomposed: N pts → N junctions + N-1 conduits)
         raingages.csv  → [RAINGAGES] + [TIMESERIES]
@@ -89,10 +88,10 @@ class Conversion:
         self.manholes_csv = os.path.join(thoat_nuoc, "manholes.csv")
         self.sewers_csv = os.path.join(thoat_nuoc, "sewers.csv")
         self.pumps_csv = os.path.join(thoat_nuoc, "pumps.csv")
-        self.outlets_csv = os.path.join(thoat_nuoc, "outlets.csv")
         self.orifices_csv = os.path.join(thoat_nuoc, "orifices.csv")
+        self.outfalls_csv = os.path.join(thoat_nuoc, "outfalls.csv")
+        self.weirs_csv = os.path.join(thoat_nuoc, "weir.csv")
         self.lakes_csv = os.path.join(mlshkm, "lakes.csv")
-        self.congdap_csv = os.path.join(mlshkm, "congdap.csv")
         self.rivers_csv = os.path.join(mlshkm, "rivers.csv")
         self.canals_csv = os.path.join(mlshkm, "canals.csv")
 
@@ -311,7 +310,7 @@ class Conversion:
     def _build_manhole_index(self):
         """Build coordinate → manhole-data mapping from manholes CSV.
 
-        Returns dict: {(round(lon,6), round(lat,6)): {name, elevation, max_depth}}
+        Returns dict: {(round(lon,6), round(lat,6)): {name, elevation, max_depth, sewer_line}}
         """
         index = {}
         if not os.path.exists(self.manholes_csv):
@@ -331,8 +330,95 @@ class Conversion:
                 "name": self._swmm_name(row["Name"]),
                 "elevation": inv_elev,
                 "max_depth": rim_elev - inv_elev,
+                "sewer_line": row.get("SewerLine", "").strip(),
             }
         return index
+
+    def _build_lake_index(self):
+        """Build name → (lon, lat, data) mapping from lakes CSV.
+
+        Returns dict: {name_lower: {name, lon, lat, bed_elev, bank_elev, area_ha}}
+        """
+        index = {}
+        if not os.path.exists(self.lakes_csv):
+            return index
+        rows = self._read_csv(self.lakes_csv)
+        for row in rows:
+            gtype, coords = self._parse_geojson(row.get("Shape", ""))
+            if gtype != "Point":
+                continue
+            lon, lat = coords[0], coords[1]
+            if not self._point_in_bbox(lon, lat):
+                continue
+            name = row.get("Name", "").strip()
+            if not name:
+                continue
+            index[name.lower()] = {
+                "name": self._swmm_name(name),
+                "lon": lon,
+                "lat": lat,
+                "bed_elev": self._safe_float(row.get("BedElev_m"), 3.0),
+                "bank_elev": self._safe_float(row.get("BankElev_m"), 6.0),
+                "area_ha": self._safe_float(row.get("Area_ha"), 1.0),
+            }
+        return index
+
+    def _build_outfall_index(self):
+        """Build name → (lon, lat) mapping from outfalls CSV.
+
+        Returns dict: {name_lower: {name, lon, lat, sewer_line}}
+        """
+        index = {}
+        if not os.path.exists(self.outfalls_csv):
+            return index
+        rows = self._read_csv(self.outfalls_csv)
+        for row in rows:
+            gtype, coords = self._parse_geojson(row.get("Shape", ""))
+            if gtype != "Point":
+                continue
+            lon, lat = coords[0], coords[1]
+            if not self._point_in_bbox(lon, lat):
+                continue
+            name = row.get("Name", "").strip()
+            if not name:
+                continue
+            index[name.lower()] = {
+                "name": self._swmm_name(name),
+                "lon": lon,
+                "lat": lat,
+                "sewer_line": row.get("SewerLine", "").strip(),
+            }
+        return index
+
+    @staticmethod
+    def _find_nearest_junction_on_route(coord_registry, lon, lat, route_name):
+        """Find nearest junction on a specific route in coord_registry.
+
+        Only considers junctions whose 'route' field matches route_name.
+        Returns (junction_name, dist_m) or (None, inf).
+        """
+        import math
+        best_name = None
+        best_dist = float("inf")
+        R = 6371000
+        lat1 = math.radians(lat)
+        lon1 = math.radians(lon)
+        route_lower = route_name.lower().strip() if route_name else ""
+        for (jlon, jlat), info in coord_registry.items():
+            j_route = info.get("route", "").lower().strip()
+            if route_lower and j_route and route_lower != j_route:
+                continue
+            lat2 = math.radians(jlat)
+            lon2 = math.radians(jlon)
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = (math.sin(dlat / 2) ** 2
+                 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2)
+            d = 2 * R * math.asin(math.sqrt(a))
+            if d < best_dist:
+                best_dist = d
+                best_name = info["name"]
+        return best_name, best_dist
 
     def _build_congdap_spatial_index(self, congdap_csv, canal_csv,
                                      snap_tolerance_m=10.0):
@@ -453,6 +539,32 @@ class Conversion:
             "max_depth": max_depth,
         }
         return name_candidate
+
+    @staticmethod
+    def _find_nearest_junction(coord_registry, lon, lat):
+        """Find the nearest junction in coord_registry to (lon, lat).
+
+        Uses Haversine-approximated distance. Returns (junction_name, dist_m)
+        or (None, inf) if registry is empty.
+        """
+        import math
+        best_name = None
+        best_dist = float("inf")
+        R = 6371000  # Earth radius in metres
+        lat1 = math.radians(lat)
+        lon1 = math.radians(lon)
+        for (jlon, jlat), info in coord_registry.items():
+            lat2 = math.radians(jlat)
+            lon2 = math.radians(jlon)
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = (math.sin(dlat / 2) ** 2
+                 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2)
+            d = 2 * R * math.asin(math.sqrt(a))
+            if d < best_dist:
+                best_dist = d
+                best_name = info["name"]
+        return best_name, best_dist
 
     # =========================================================
     # QGIS layer factories
@@ -669,15 +781,17 @@ class Conversion:
         print(f"  STORAGE: {layer.featureCount()} features")
         return layer, []
 
-    def create_outfalls(self, entries=None):
-        """Create SWMM OUTFALLS layer.
+    def create_outfalls(self, csv_path=None):
+        """Create SWMM OUTFALLS layer from outfalls CSV.
 
         Args:
-            entries: list of (name, lon, lat, elevation, type).
-                     Defaults to one outfall: OF01 at Hanoi sewer network boundary.
+            csv_path: Path to outfalls CSV. Defaults to self.outfalls_csv.
+
+        Each row becomes an OUTFALL node. Field mapping:
+            Name -> Name, Elev_m -> Elevation, Type -> Type,
+            FixedStage -> FixedStage, FlapGate -> FlapGate.
         """
-        if entries is None:
-            entries = [("OF01", 105.851, 21.022, 4.0, "FREE")]
+        csv_path = csv_path or self.outfalls_csv
         fields = [
             QgsField("Name", QVariant.String, len=150),
             QgsField("Elevation", QVariant.Double),
@@ -690,14 +804,31 @@ class Conversion:
         layer = self._point_layer("outfalls", fields)
         pr = layer.dataProvider()
         feats = []
-        for name, lon, lat, elev, typ in entries:
+
+        rows = self._read_csv(csv_path)
+        for row in rows:
+            gtype, coords = self._parse_geojson(row.get("Shape", ""))
+            if gtype != "Point":
+                continue
+            lon, lat = coords[0], coords[1]
+            if not self._point_in_bbox(lon, lat):
+                continue
+
+            name = row.get("Name", f"OF{row.get('ID', '0')}")
+            elev = self._safe_float(row.get("Elev_m", "0"))
+            typ = row.get("Type", "FREE").strip() or "FREE"
+            fixed = self._safe_float(row.get("FixedStage", ""))
+            flap = row.get("FlapGate", "NO").strip() or "NO"
+
             feat = QgsFeature(layer.fields())
             feat.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(lon, lat)))
             feat.setAttribute("Name", self._swmm_name(name))
             feat.setAttribute("Elevation", elev)
             feat.setAttribute("Type", typ)
-            feat.setAttribute("FlapGate", "NO")
+            feat.setAttribute("FixedStage", fixed)
+            feat.setAttribute("FlapGate", flap)
             feats.append(feat)
+
         pr.addFeatures(feats)
         layer.updateExtents()
         print(f"  OUTFALLS: {layer.featureCount()} features")
@@ -707,19 +838,37 @@ class Conversion:
     # Link layer creators
     # =========================================================
 
-    def create_conduits(self, csv_path=None):
-        """Sewers → SWMM CONDUITS. Returns (layer, auto_junctions=[])."""
+    def create_conduits(self, csv_path=None, coord_registry=None):
+        """Sewers → SWMM CONDUITS with junction decomposition.
+
+        Decomposes each sewer LineString into segments connected by junctions.
+        At each endpoint/vertex, uses coord_registry for deduplication so that
+        manholes, outfalls, and other sewers sharing the same position share
+        the same junction node.
+
+        Returns (layer, auto_junctions).
+        """
+        if coord_registry is None:
+            coord_registry = {}
         csv_path = csv_path or self.sewers_csv
         rows = self._read_csv(csv_path)
         layer = self._line_layer("conduits", self._conduit_fields())
         pr = layer.dataProvider()
         feats = []
+        auto_junctions = []
+
         for row in rows:
             gtype, coords = self._parse_geojson(row.get("RouteShape", ""))
             if gtype != "LineString" or len(coords) < 2:
                 continue
             if not self._linestring_in_bbox(coords):
                 continue
+
+            sewer_name = row.get("Name", "").strip()
+            from_node_csv = row.get("FromNode", "").strip()
+            to_node_csv = row.get("ToNode", "").strip()
+
+            # Parse cross-section
             xs_type = row.get("XSType", "CIRCULAR")
             diam_mm = row.get("Diam_mm", "")
             size_mm = row.get("Size_mm", "")
@@ -734,31 +883,65 @@ class Conversion:
                 geom1 = 0.4
                 geom2 = 0.0
             roughness = self.ROUGHNESS.get(row.get("Material", ""), self.DEFAULT_ROUGHNESS)
-            feat = QgsFeature(layer.fields())
-            feat.setGeometry(QgsGeometry.fromPolylineXY([QgsPointXY(c[0], c[1]) for c in coords]))
-            feat.setAttribute("Name", self._swmm_name(row["Name"]))
-            feat.setAttribute("FromNode", self._swmm_name(row["FromNode"]))
-            feat.setAttribute("ToNode", self._swmm_name(row["ToNode"]))
-            feat.setAttribute("Length", self._safe_float(row.get("Length_m"), 100.0))
-            feat.setAttribute("Roughness", roughness)
-            feat.setAttribute("InOffset", 0.0)
-            feat.setAttribute("OutOffset", 0.0)
-            feat.setAttribute("InitFlow", 0.0)
-            feat.setAttribute("MaxFlow", 0.0)
-            feat.setAttribute("XsectShape", xs_type)
-            feat.setAttribute("Geom1", geom1)
-            feat.setAttribute("Geom2", geom2)
-            feat.setAttribute("Geom3", 0.0)
-            feat.setAttribute("Geom4", 0.0)
-            feat.setAttribute("Barrels", 1)
-            feats.append(feat)
+
+            # Register junctions at each vertex, using coord_registry dedup
+            junc_names = []
+            for i, c in enumerate(coords):
+                lon, lat = c[0], c[1]
+                # For first/last vertex, prefer CSV FromNode/ToNode names
+                if i == 0 and from_node_csv:
+                    candidate = self._swmm_name(from_node_csv)
+                elif i == len(coords) - 1 and to_node_csv:
+                    candidate = self._swmm_name(to_node_csv)
+                else:
+                    candidate = self._swmm_name(f"SJ_{sewer_name}_{i}")
+                jname = self._get_or_create_junction(
+                    coord_registry, lon, lat, candidate,
+                    elevation=0.0, max_depth=3.0)
+                # Tag with sewer route for subcatchment outlet matching
+                key = (round(lon, 6), round(lat, 6))
+                if "route" not in coord_registry[key]:
+                    coord_registry[key]["route"] = sewer_name
+                junc_names.append(jname)
+                auto_junctions.append((jname, lon, lat,
+                                       coord_registry[key]["elevation"],
+                                       coord_registry[key]["max_depth"]))
+
+            # Create conduit segments between consecutive junctions
+            for i in range(len(coords) - 1):
+                lon1, lat1 = coords[i][0], coords[i][1]
+                lon2, lat2 = coords[i + 1][0], coords[i + 1][1]
+                seg_len = self._haversine(lon1, lat1, lon2, lat2)
+                if seg_len < 0.01:
+                    continue
+                seg_name = self._swmm_name(f"{sewer_name}_S{i}")
+                feat = self._make_conduit_feature(
+                    layer, seg_name, junc_names[i], junc_names[i + 1],
+                    lon1, lat1, lon2, lat2, seg_len,
+                    roughness, xs_type, geom1, geom2, 0.0)
+                feats.append(feat)
+
         pr.addFeatures(feats)
         layer.updateExtents()
-        print(f"  CONDUITS: {layer.featureCount()} features")
-        return layer, []
+        print(f"  CONDUITS (sewers): {layer.featureCount()} segments")
+        return layer, auto_junctions
 
-    def create_pumps(self, csv_path=None):
-        """Pumps → SWMM PUMPS links. Returns (layer, auto_junctions)."""
+    def create_pumps(self, csv_path=None, coord_registry=None,
+                     lake_index=None):
+        """Pumps → SWMM PUMPS links.
+
+        Pump is modelled as a link from Source (lake) to nearest sewer junction.
+        - FromNode: lake position (looked up by Source attribute)
+        - ToNode: pump position (snapped to nearest sewer junction)
+
+        Falls back to auto-generated junctions if Source lake not found.
+
+        Returns (layer, auto_junctions).
+        """
+        if coord_registry is None:
+            coord_registry = {}
+        if lake_index is None:
+            lake_index = {}
         csv_path = csv_path or self.pumps_csv
         rows = self._read_csv(csv_path)
         fields = [
@@ -781,74 +964,73 @@ class Conversion:
             lon, lat = coords[0], coords[1]
             if not self._point_in_bbox(lon, lat):
                 continue
-            from_node = self._swmm_name(row.get("FromNode") or f"PN{row['ID']}_in")
-            to_node = self._swmm_name(row.get("ToNode") or f"PN{row['ID']}_out")
+
+            pump_id = row.get("ID", "0")
+            source_name = row.get("Source", "").strip()
+
+            # FromNode: lake position if Source specified
+            lake_info = lake_index.get(source_name.lower()) if source_name else None
+            if lake_info:
+                from_node = self._get_or_create_junction(
+                    coord_registry, lake_info["lon"], lake_info["lat"],
+                    f"LK_{lake_info['name']}",
+                    elevation=lake_info["bed_elev"],
+                    max_depth=lake_info["bank_elev"] - lake_info["bed_elev"])
+                from_lon, from_lat = lake_info["lon"], lake_info["lat"]
+                fkey = (round(from_lon, 6), round(from_lat, 6))
+                auto_junctions.append((from_node, from_lon, from_lat,
+                                       coord_registry[fkey]["elevation"],
+                                       coord_registry[fkey]["max_depth"]))
+                print(f"    Pump {row.get('Name','?')}: Source={source_name} -> {from_node}")
+            else:
+                from_node = self._swmm_name(f"PN{pump_id}_in")
+                from_lon, from_lat = lon, lat
+                auto_junctions.append((from_node, lon, lat, 0.0, 3.0))
+
+            # ToNode: pump position, snapped to nearest existing junction
+            to_jname = self._get_or_create_junction(
+                coord_registry, lon, lat, f"PN{pump_id}_out",
+                elevation=0.0, max_depth=3.0)
+            tkey = (round(lon, 6), round(lat, 6))
+            auto_junctions.append((to_jname, lon, lat,
+                                   coord_registry[tkey]["elevation"],
+                                   coord_registry[tkey]["max_depth"]))
+
+            # Geometry: line from lake to pump
             feat = QgsFeature(layer.fields())
-            feat.setGeometry(self._link_from_point(lon, lat))
-            feat.setAttribute("Name", self._swmm_name(row["Name"], max_len=20) + f"_{row['ID']}")
+            feat.setGeometry(QgsGeometry.fromPolylineXY([
+                QgsPointXY(from_lon, from_lat),
+                QgsPointXY(lon, lat),
+            ]))
+            feat.setAttribute("Name", self._swmm_name(row["Name"], max_len=20) + f"_{pump_id}")
             feat.setAttribute("FromNode", from_node)
-            feat.setAttribute("ToNode", to_node)
-            feat.setAttribute("PumpCurve", None)  # plugin fills None → '*' (ideal pump)
+            feat.setAttribute("ToNode", to_jname)
+            feat.setAttribute("PumpCurve", None)
             feat.setAttribute("Status", "ON")
             feat.setAttribute("Startup", 0.0)
             feat.setAttribute("Shutoff", 0.0)
             feats.append(feat)
-            auto_junctions.append((from_node, lon, lat, 0.0, 3.0))
-            auto_junctions.append((to_node, lon + self.LINK_OFFSET, lat, 0.0, 3.0))
+
         pr.addFeatures(feats)
         layer.updateExtents()
         print(f"  PUMPS: {layer.featureCount()} features")
         return layer, auto_junctions
 
-    def create_outlets_layer(self, csv_path=None):
-        """Outlets → SWMM OUTLETS links (FUNCTIONAL). Returns (layer, auto_junctions)."""
-        csv_path = csv_path or self.outlets_csv
-        rows = self._read_csv(csv_path)
-        fields = [
-            QgsField("Name", QVariant.String, len=150),
-            QgsField("FromNode", QVariant.String, len=150),
-            QgsField("ToNode", QVariant.String, len=150),
-            QgsField("InOffset", QVariant.Double),
-            QgsField("RateCurve", QVariant.String, len=30),
-            QgsField("Qcoeff", QVariant.Double),
-            QgsField("Qexpon", QVariant.Double),
-            QgsField("FlapGate", QVariant.String, len=10),
-            QgsField("CurveName", QVariant.String, len=80),
-        ]
-        layer = self._line_layer("outlets", fields)
-        pr = layer.dataProvider()
-        feats = []
-        auto_junctions = []
-        for row in rows:
-            gtype, coords = self._parse_geojson(row.get("Shape", ""))
-            if gtype != "Point":
-                continue
-            lon, lat = coords[0], coords[1]
-            if not self._point_in_bbox(lon, lat):
-                continue
-            from_node = self._swmm_name(row.get("FromNode") or f"OL{row['ID']}_up")
-            to_node = self._swmm_name(row.get("ToNode") or f"OL{row['ID']}_out")
-            feat = QgsFeature(layer.fields())
-            feat.setGeometry(self._link_from_point(lon, lat))
-            feat.setAttribute("Name", self._swmm_name(row["Name"], max_len=20) + f"_{row['ID']}")
-            feat.setAttribute("FromNode", from_node)
-            feat.setAttribute("ToNode", to_node)
-            feat.setAttribute("InOffset", self._safe_float(row.get("InvElev_m"), 0.0))
-            feat.setAttribute("RateCurve", "FUNCTIONAL/DEPTH")
-            feat.setAttribute("Qcoeff", 1.0)
-            feat.setAttribute("Qexpon", 0.5)
-            feat.setAttribute("FlapGate", "NO")
-            feat.setAttribute("CurveName", None)
-            feats.append(feat)
-            auto_junctions.append((from_node, lon, lat, 0.0, 3.0))
-            auto_junctions.append((to_node, lon + self.LINK_OFFSET, lat, 0.0, 3.0))
-        pr.addFeatures(feats)
-        layer.updateExtents()
-        print(f"  OUTLETS: {layer.featureCount()} features")
-        return layer, auto_junctions
+    def create_orifices(self, csv_path=None, coord_registry=None,
+                        lake_index=None):
+        """Orifices → SWMM ORIFICES links with Receiver-based target resolution.
 
-    def create_orifices(self, csv_path=None):
-        """Orifices / tidal gates → SWMM ORIFICES links. Returns (layer, auto_junctions)."""
+        FromNode: orifice position (snapped to nearest existing junction).
+        ToNode: resolved from Receiver attribute:
+            - If Receiver matches a lake name → lake's junction
+            - Otherwise → nearest canal/river junction matching Receiver name
+
+        Returns (layer, auto_junctions).
+        """
+        if coord_registry is None:
+            coord_registry = {}
+        if lake_index is None:
+            lake_index = {}
         csv_path = csv_path or self.orifices_csv
         rows = self._read_csv(csv_path)
         fields = [
@@ -875,18 +1057,77 @@ class Conversion:
             lon, lat = coords[0], coords[1]
             if not self._point_in_bbox(lon, lat):
                 continue
-            from_node = self._swmm_name(row.get("FromNode") or f"OR{row['ID']}_up")
-            to_node = self._swmm_name(row.get("ToNode") or f"OR{row['ID']}_dn")
+
+            orifice_id = row.get("ID", "0")
+            receiver = row.get("Receiver", "").strip()
+
+            # FromNode: orifice position, snapped to existing junction
+            from_node = self._get_or_create_junction(
+                coord_registry, lon, lat, f"OR{orifice_id}_up",
+                elevation=0.0, max_depth=3.0)
+            fkey = (round(lon, 6), round(lat, 6))
+            auto_junctions.append((from_node, lon, lat,
+                                   coord_registry[fkey]["elevation"],
+                                   coord_registry[fkey]["max_depth"]))
+
+            # ToNode: resolve from Receiver
+            to_lon, to_lat = lon + self.LINK_OFFSET, lat  # fallback
+            to_node = f"OR{orifice_id}_dn"
+
+            if receiver:
+                lake_info = lake_index.get(receiver.lower())
+                if lake_info:
+                    # Receiver is a lake — use lake's junction
+                    to_node = self._get_or_create_junction(
+                        coord_registry, lake_info["lon"], lake_info["lat"],
+                        f"LK_{lake_info['name']}",
+                        elevation=lake_info["bed_elev"],
+                        max_depth=lake_info["bank_elev"] - lake_info["bed_elev"])
+                    to_lon, to_lat = lake_info["lon"], lake_info["lat"]
+                    print(f"    Orifice {row.get('Name','?')}: -> Lake {receiver}")
+                else:
+                    # Receiver is a canal/river — find nearest junction with matching route
+                    jname, dist = self._find_nearest_junction_on_route(
+                        coord_registry, lon, lat, receiver)
+                    if jname and dist < 500:  # within 500m
+                        to_node = jname
+                        # Find the position of the matched junction
+                        for (jlon, jlat), info in coord_registry.items():
+                            if info["name"] == jname:
+                                to_lon, to_lat = jlon, jlat
+                                break
+                        print(f"    Orifice {row.get('Name','?')}: -> {receiver} junction {jname} ({dist:.0f}m)")
+                    else:
+                        # Fallback: nearest any junction
+                        jname, dist = self._find_nearest_junction(coord_registry, lon, lat)
+                        if jname:
+                            to_node = jname
+                            for (jlon, jlat), info in coord_registry.items():
+                                if info["name"] == jname:
+                                    to_lon, to_lat = jlon, jlat
+                                    break
+                        print(f"    Orifice {row.get('Name','?')}: -> nearest {to_node} ({dist:.0f}m)")
+
+            tkey = (round(to_lon, 6), round(to_lat, 6))
+            if tkey not in coord_registry:
+                coord_registry[tkey] = {"name": to_node, "elevation": 0.0, "max_depth": 3.0}
+            auto_junctions.append((to_node, to_lon, to_lat,
+                                   coord_registry[tkey]["elevation"],
+                                   coord_registry[tkey]["max_depth"]))
+
             height = self._safe_float(row.get("Height_m"), 0.0)
             width = self._safe_float(row.get("Width_m"), 0.0)
-            # Default to 1 m if dimensions are missing/zero
             if height <= 0:
                 height = 1.0
             if width <= 0:
                 width = 1.0
+
             feat = QgsFeature(layer.fields())
-            feat.setGeometry(self._link_from_point(lon, lat))
-            feat.setAttribute("Name", self._swmm_name(row["Name"], max_len=20) + f"_{row['ID']}")
+            feat.setGeometry(QgsGeometry.fromPolylineXY([
+                QgsPointXY(lon, lat),
+                QgsPointXY(to_lon, to_lat),
+            ]))
+            feat.setAttribute("Name", self._swmm_name(row["Name"], max_len=20) + f"_{orifice_id}")
             feat.setAttribute("FromNode", from_node)
             feat.setAttribute("ToNode", to_node)
             feat.setAttribute("Type", "BOTTOM")
@@ -898,8 +1139,7 @@ class Conversion:
             feat.setAttribute("Height", height)
             feat.setAttribute("Width", width)
             feats.append(feat)
-            auto_junctions.append((from_node, lon, lat, 0.0, 3.0))
-            auto_junctions.append((to_node, lon + self.LINK_OFFSET, lat, 0.0, 3.0))
+
         pr.addFeatures(feats)
         layer.updateExtents()
         print(f"  ORIFICES: {layer.featureCount()} features")
@@ -915,7 +1155,7 @@ class Conversion:
 
         Returns (layer, auto_junctions).
         """
-        csv_path = csv_path or self.congdap_csv
+        csv_path = csv_path or self.weirs_csv
         rows = self._read_csv(csv_path)
         layer = self._line_layer("standalone_weirs", self._weir_fields())
         pr = layer.dataProvider()
@@ -1293,8 +1533,16 @@ class Conversion:
         print(f"  RAINGAGES: {layer.featureCount()} features")
         return layer
 
-    def create_subcatchments(self, csv_path=None):
-        """Subcatchments → SWMM SUBCATCHMENTS (Polygon). Returns layer."""
+    def create_subcatchments(self, csv_path=None, coord_registry=None):
+        """Subcatchments → SWMM SUBCATCHMENTS (Polygon). Returns layer.
+
+        Args:
+            csv_path: Path to subcatchments CSV.
+            coord_registry: Junction coordinate registry from canal/sewer
+                decomposition. Used to find the nearest junction for each
+                subcatchment's outlet coordinates (OutletLon, OutletLat).
+                If None, falls back to polygon centroid lookup.
+        """
         csv_path = csv_path or self.subcatchments_csv
         if not os.path.exists(csv_path):
             print("  SUBCATCHMENTS: 0 features (file not found)")
@@ -1345,12 +1593,43 @@ class Conversion:
             if self.bbox is not None:
                 if not any(self._point_in_bbox(c[0], c[1]) for c in ring):
                     continue
+
+            # Determine SWMM outlet junction by nearest-junction lookup
+            # If SewerRoute is specified, restrict search to junctions on that route
+            outlet_name = ""
+            o_lon = self._safe_float(row.get("OutletLon"), None)
+            o_lat = self._safe_float(row.get("OutletLat"), None)
+            sewer_route = row.get("SewerRoute", "").strip()
+            if o_lon is not None and o_lat is not None and coord_registry:
+                if sewer_route:
+                    jname, dist = self._find_nearest_junction_on_route(
+                        coord_registry, o_lon, o_lat, sewer_route)
+                    if jname:
+                        outlet_name = jname
+                        print(f"    {row.get('Name','?')}: outlet={jname} "
+                              f"on route '{sewer_route}' (dist={dist:.1f}m)")
+                    else:
+                        # Fallback: no junction found on route, try any junction
+                        jname, dist = self._find_nearest_junction(
+                            coord_registry, o_lon, o_lat)
+                        if jname:
+                            outlet_name = jname
+                            print(f"    {row.get('Name','?')}: outlet={jname} "
+                                  f"(fallback, dist={dist:.1f}m)")
+                else:
+                    jname, dist = self._find_nearest_junction(
+                        coord_registry, o_lon, o_lat)
+                    if jname:
+                        outlet_name = jname
+                        print(f"    {row.get('Name','?')}: outlet={jname} "
+                              f"(dist={dist:.1f}m)")
+
             feat = QgsFeature(layer.fields())
             qring = [QgsPointXY(c[0], c[1]) for c in ring]
             feat.setGeometry(QgsGeometry.fromPolygonXY([qring]))
             feat.setAttribute("Name", self._swmm_name(row["Name"]))
             feat.setAttribute("RainGage", self._swmm_name(row.get("RainGage", "")))
-            feat.setAttribute("Outlet", row.get("Outlet", ""))
+            feat.setAttribute("Outlet", outlet_name)
             feat.setAttribute("Area", self._safe_float(row.get("Area_ha"), 1.0))
             feat.setAttribute("Imperv", self._safe_float(row.get("Imperv_pct"), 25.0))
             feat.setAttribute("Width", self._safe_float(row.get("Width_m"), 100.0))
@@ -1556,14 +1835,13 @@ class Conversion:
         print("\n[Link layers]")
         conduits_layer, _ = self.create_conduits()
         pumps_layer, pj = self.create_pumps()
-        outlets_layer, olj = self.create_outlets_layer()
         orifices_layer, orj = self.create_orifices()
-        all_auto += pj + olj + orj
+        all_auto += pj + orj
 
         # --- Congdap spatial index ---
         print("\n[Congdap spatial index]")
         congdap_index, matched_cd_ids, _unmatched = \
-            self._build_congdap_spatial_index(self.congdap_csv, self.canals_csv)
+            self._build_congdap_spatial_index(self.weirs_csv, self.canals_csv)
         print(f"  Matched: {len(matched_cd_ids)} congdap → canal segments")
         print(f"  Unmatched: {len(_unmatched)} standalone weirs")
 
@@ -1620,7 +1898,7 @@ class Conversion:
         print("\n[QGIS project]")
         project = QgsProject.instance()
         for lyr in [junctions_layer, outfalls_layer, storage_layer,
-                    conduits_layer, pumps_layer, outlets_layer,
+                    conduits_layer, pumps_layer,
                     orifices_layer, weirs_layer]:
             project.addMapLayer(lyr)
         print("  Layers added to project")
@@ -1647,7 +1925,7 @@ class Conversion:
                 "FILE_STORAGES": storage_layer,
                 "FILE_CONDUITS": conduits_layer,
                 "FILE_PUMPS": pumps_layer,
-                "FILE_OUTLETS": outlets_layer,
+                "FILE_OUTLETS": self._line_layer("outlets", []),  # empty placeholder
                 "FILE_ORIFICES": orifices_layer,
                 "FILE_WEIRS": weirs_layer,
                 "FILE_OPTIONS": options_path,
