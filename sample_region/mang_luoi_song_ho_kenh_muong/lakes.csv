@@ -1,2 +1,2 @@
 ﻿ID,Name,Group,Area_ha,BedArea_ha,Vol_m3,BedElev_m,CrestElv,BankElev_m,NatWtrLvl,WetLvl_m,DryLvl_m,NumInlets,Perim_m,IrrigSys,Location,Province,District,Ward,Manager,YearBuilt,YearUpdate,Status,Notes,Shape
-1,Lake_1,,1.0,,,,,,,,,4,,,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.50433901537066, 11.133144669787733]}"
+,Lake_1,,1.0,,,,,,,,,4,,,,,,,,,,,,"{""type"": ""Point"", ""coordinates"": [106.50433901537066, 11.133144669787733]}"

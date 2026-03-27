@@ -391,10 +391,13 @@ class Conversion:
         return index
 
     @staticmethod
-    def _find_nearest_junction_on_route(coord_registry, lon, lat, route_name):
+    def _find_nearest_junction_on_route(coord_registry, lon, lat, route_name,
+                                        exclude_prefix=None):
         """Find nearest junction on a specific route in coord_registry.
 
         Only considers junctions whose 'route' field matches route_name.
+        Optionally skips junctions whose name starts with exclude_prefix
+        (e.g. exclude_prefix="CD" to skip inline weir junctions).
         Returns (junction_name, dist_m) or (None, inf).
         """
         import math
@@ -407,6 +410,8 @@ class Conversion:
         for (jlon, jlat), info in coord_registry.items():
             j_route = info.get("route", "").lower().strip()
             if route_lower and j_route and route_lower != j_route:
+                continue
+            if exclude_prefix and info["name"].startswith(exclude_prefix):
                 continue
             lat2 = math.radians(jlat)
             lon2 = math.radians(jlon)
@@ -1048,15 +1053,20 @@ class Conversion:
 
     def create_orifices(self, csv_path=None, coord_registry=None,
                         lake_index=None):
-        """Orifices → SWMM ORIFICES links with Receiver-based target resolution.
+        """Orifices → SWMM ORIFICES links.
 
-        FromNode: orifice position (snapped to nearest existing junction).
-        ToNode: resolved from Receiver attribute:
-            - If Receiver matches a lake name → lake's junction
-            - Otherwise → nearest canal/river junction matching Receiver name
+        FromNode: resolved from Source attribute (upstream sewer/canal):
+            - Source name → merge with nearest junction on that route (no CD prefix)
+            - No Source → auto-generate OR{ID}_up at orifice position
+        ToNode: resolved from Receiver attribute (downstream water body):
+            - Receiver matches lake name → lake junction
+            - Receiver is canal/river → nearest junction on that route (no CD prefix)
+              If ToNode position coincides with orifice position → offset ToNode
+            - Fallback → OR{ID}_dn at LINK_OFFSET from orifice
 
         Returns (layer, auto_junctions).
         """
+        import math
         if coord_registry is None:
             coord_registry = {}
         if lake_index is None:
@@ -1080,6 +1090,7 @@ class Conversion:
         pr = layer.dataProvider()
         feats = []
         auto_junctions = []
+        R = 6371000
         for row in rows:
             gtype, coords = self._parse_geojson(row.get("Shape", ""))
             if gtype != "Point":
@@ -1089,9 +1100,11 @@ class Conversion:
                 continue
 
             orifice_id = row.get("ID", "0")
+            orifice_name = row.get("Name", f"OR{orifice_id}")
+            source = row.get("Source", "").strip()
             receiver = row.get("Receiver", "").strip()
 
-            # Resolve Receiver target first (determines FromNode strategy)
+            # ── Step 1: Resolve ToNode from Receiver ─────────────────────────
             to_lon, to_lat = lon + self.LINK_OFFSET, lat  # fallback
             to_node = f"OR{orifice_id}_dn"
             is_lake_target = False
@@ -1099,7 +1112,7 @@ class Conversion:
             if receiver:
                 lake_info = lake_index.get(receiver.lower())
                 if lake_info:
-                    # Receiver is a lake — use lake's junction
+                    # Receiver is a lake — use lake junction
                     to_node = self._get_or_create_junction(
                         coord_registry, lake_info["lon"], lake_info["lat"],
                         f"LK_{lake_info['name']}",
@@ -1107,20 +1120,47 @@ class Conversion:
                         max_depth=lake_info["bank_elev"] - lake_info["bed_elev"])
                     to_lon, to_lat = lake_info["lon"], lake_info["lat"]
                     is_lake_target = True
-                    print(f"    Orifice {row.get('Name','?')}: -> Lake {receiver}")
+                    print(f"    Orifice {orifice_name}: -> Lake {receiver}")
                 else:
-                    # Receiver is a canal/river — find nearest junction with matching route
+                    # Receiver is a canal/river — find nearest junction on that
+                    # route, excluding inline weir junctions (CD prefix)
                     jname, dist = self._find_nearest_junction_on_route(
-                        coord_registry, lon, lat, receiver)
-                    if jname and dist < 500:  # within 500m
+                        coord_registry, lon, lat, receiver,
+                        exclude_prefix="CD")
+                    if jname and dist < 500:
                         to_node = jname
                         for (jlon, jlat), info in coord_registry.items():
                             if info["name"] == jname:
                                 to_lon, to_lat = jlon, jlat
                                 break
-                        print(f"    Orifice {row.get('Name','?')}: -> {receiver} junction {jname} ({dist:.0f}m)")
+                        # If ToNode is at the same position as the orifice,
+                        # offset it slightly so the link has non-zero length.
+                        lat1 = math.radians(lat)
+                        lon1 = math.radians(lon)
+                        lat2 = math.radians(to_lat)
+                        lon2 = math.radians(to_lon)
+                        dlat = lat2 - lat1
+                        dlon = lon2 - lon1
+                        a = (math.sin(dlat / 2) ** 2
+                             + math.cos(lat1) * math.cos(lat2)
+                             * math.sin(dlon / 2) ** 2)
+                        dist_to_node = 2 * R * math.asin(math.sqrt(a))
+                        if dist_to_node < 2.0:
+                            # Move ToNode slightly to create a non-zero link
+                            to_lon += self.LINK_OFFSET
+                            # Re-register at shifted position
+                            shifted_key = (round(to_lon, 6), round(to_lat, 6))
+                            if shifted_key not in coord_registry:
+                                coord_registry[shifted_key] = {
+                                    "name": to_node,
+                                    "elevation": coord_registry.get(
+                                        (round(to_lon - self.LINK_OFFSET, 6),
+                                         round(to_lat, 6)), {}).get("elevation", 0.0),
+                                    "max_depth": 3.0,
+                                }
+                        print(f"    Orifice {orifice_name}: -> {receiver} "
+                              f"junction {jname} ({dist:.0f}m)")
                     else:
-                        # Fallback: nearest any junction
                         jname, dist = self._find_nearest_junction(coord_registry, lon, lat)
                         if jname:
                             to_node = jname
@@ -1128,30 +1168,41 @@ class Conversion:
                                 if info["name"] == jname:
                                     to_lon, to_lat = jlon, jlat
                                     break
-                        print(f"    Orifice {row.get('Name','?')}: -> nearest {to_node} ({dist:.0f}m)")
+                        print(f"    Orifice {orifice_name}: -> nearest {to_node} ({dist:.0f}m)")
 
-            # FromNode: orifice position
-            # For lake targets: snap to nearest existing junction (sewer endpoint)
-            # For canal/river targets: always create own junction at an offset
-            #   position so the orifice doesn't merge into an existing
-            #   sewer/canal junction and disrupt the canal topology.
-            #   Topology: sewer_end --- orifice link ---> canal_junction
+            # ── Step 2: Resolve FromNode from Source ──────────────────────────
             from_lon, from_lat = lon, lat
             if is_lake_target:
+                # Lake target: FromNode snaps to nearest junction (sewer endpoint)
                 from_node = self._get_or_create_junction(
                     coord_registry, lon, lat, f"OR{orifice_id}_up",
                     elevation=0.0, max_depth=3.0)
+            elif source and coord_registry:
+                # Source is sewer/canal — merge FromNode with nearest junction
+                # on that route, excluding inline weir junctions (CD prefix)
+                jname, dist = self._find_nearest_junction_on_route(
+                    coord_registry, lon, lat, source,
+                    exclude_prefix="CD")
+                if jname and dist < 500:
+                    from_node = jname
+                    for (jlon, jlat), info in coord_registry.items():
+                        if info["name"] == jname:
+                            from_lon, from_lat = jlon, jlat
+                            break
+                    print(f"    Orifice {orifice_name}: from {source} "
+                          f"junction {from_node} ({dist:.0f}m)")
+                else:
+                    from_node = self._get_or_create_junction(
+                        coord_registry, lon, lat, f"OR{orifice_id}_up",
+                        elevation=0.0, max_depth=3.0)
             else:
-                # Force a unique junction for this orifice by using an offset
-                # so it does not collide with any existing sewer/canal junction
-                from_lon = lon - self.LINK_OFFSET
-                from_node_name = self._swmm_name(
-                    row.get("Name", f"OR{orifice_id}"))
                 from_node = self._get_or_create_junction(
-                    coord_registry, from_lon, from_lat, from_node_name,
+                    coord_registry, lon, lat, f"OR{orifice_id}_up",
                     elevation=0.0, max_depth=3.0)
 
             fkey = (round(from_lon, 6), round(from_lat, 6))
+            if fkey not in coord_registry:
+                coord_registry[fkey] = {"name": from_node, "elevation": 0.0, "max_depth": 3.0}
             auto_junctions.append((from_node, from_lon, from_lat,
                                    coord_registry[fkey]["elevation"],
                                    coord_registry[fkey]["max_depth"]))
@@ -1172,10 +1223,10 @@ class Conversion:
 
             feat = QgsFeature(layer.fields())
             feat.setGeometry(QgsGeometry.fromPolylineXY([
-                QgsPointXY(lon, lat),
+                QgsPointXY(from_lon, from_lat),
                 QgsPointXY(to_lon, to_lat),
             ]))
-            feat.setAttribute("Name", self._swmm_name(row["Name"], max_len=20) + f"_{orifice_id}")
+            feat.setAttribute("Name", self._swmm_name(orifice_name, max_len=20) + f"_{orifice_id}")
             feat.setAttribute("FromNode", from_node)
             feat.setAttribute("ToNode", to_node)
             feat.setAttribute("Type", "BOTTOM")

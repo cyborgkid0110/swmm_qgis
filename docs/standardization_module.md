@@ -394,8 +394,7 @@ All water regulating culverts are merged into a single `weir.csv` dataset. The `
 |------------|------|-------|-------------|----------------------|
 | `ID`* | Integer | 10 | Feature ID | stt |
 | `Name`* | String | 150 | Gate name | TenCongDap |
-| `FromNode`* | String | 20 | Upstream node ID | - |
-| `ToNode`* | String | 20 | Downstream node ID | - |
+| `Source` | String | 80 | Upstream sewer/canal feeding the orifice | - |
 | `Position` | String | 80 | Location description | ViTri |
 | `Type` | String | 60 | Structure type (SIDE/BOTTOM per SWMM) | LoaiCongTrinh |
 | `Form` | String | 60 | Orifice shape (CIRCULAR/RECT_CLOSED) | HinhThuc |
@@ -411,9 +410,12 @@ All water regulating culverts are merged into a single `weir.csv` dataset. The `
 | `GateMtrl` | String | 60 | Gate material | CC_LoaiVatLieuCuaVan |
 | `GateCtrl` | String | 60 | Gate control mechanism | CC_KieuDongMoCuaVan |
 | `Purpose` | String | 200 | Function/purpose | MucTieuNhiemVu |
-| `Receiver` | String | 80 | Receiving water body | - |
+| `Receiver` | String | 80 | Receiving water body (downstream lake/canal/river) | - |
 | `SvcArea` | Real | 12 | Service area (ha) | DienTichPhucVu_ha |
 | `Grade` | String | 10 | Infrastructure grade | CapCongTrinh |
+
+**Notes:**
+- `Source` specifies the upstream component (sewer or canal name) whose endpoint the orifice FromNode merges with. `Receiver` specifies the downstream water body (lake name, or canal/river name) the orifice discharges into. The conversion module uses these two fields to determine SWMM `FromNode` and `ToNode`. `FromNode`/`ToNode` are not stored in the CSV — they are auto-generated during conversion.
 
 #### 3.6 Outfall / Discharge Point (Cua xa)
 

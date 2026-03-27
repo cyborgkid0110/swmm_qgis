@@ -67,7 +67,7 @@ LAKES_COLS = [
 
 SEWERS_COLS = [
     "ID", "Name", "Type", "Diam_mm", "Size_mm", "Length_m", "Material",
-    "XSArea", "FlowDir", "FromNode", "ToNode", "XSType", "StreetID",
+    "XSArea", "FlowDir", "XSType", "StreetID",
     "DrainZone", "Catchment", "Location", "Province", "District", "Ward",
     "Manager", "YearBuilt", "YearUpdate", "Status", "Notes",
 ]
@@ -88,7 +88,7 @@ PUMPS_COLS = [
 ]
 
 ORIFICES_COLS = [
-    "ID", "Name", "FromNode", "ToNode", "Position", "Type", "Form",
+    "ID", "Name", "Source", "Position", "Type", "Form",
     "Length_m", "Width_m", "Height_m", "Openings", "InvElev_m", "CrestElv",
     "DischCoef", "ClearSpan", "SillElev", "GateMtrl", "GateCtrl", "Purpose",
     "Receiver", "SvcArea", "Grade", "Location", "Province", "District", "Ward",
@@ -233,7 +233,7 @@ class ShpToCsv:
         header = list(csv_columns) + [geom_col]
 
         n_ok = 0
-        with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+        with open(csv_path, "w", newline="", encoding="utf-8-sig", errors="replace") as f:
             writer = csv.DictWriter(f, fieldnames=header)
             writer.writeheader()
 

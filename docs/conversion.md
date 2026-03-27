@@ -494,19 +494,19 @@ All link creators return `(layer, auto_junctions)` where `auto_junctions` is a l
 
 **Auto-junctions**: 2 per pump (FromNode at point, ToNode at point + LINK_OFFSET). Both with elevation=0.0, max_depth=3.0.
 
-### `create_orifices(csv_path=None)`
+### `create_orifices(csv_path=None, coord_registry=None, lake_index=None)`
 
 **Source**: `orifices.csv`
 **SWMM section**: `[ORIFICES]`
-**Geometry**: Point → short LineString
+**Geometry**: Point → LineString from FromNode to ToNode
 
 **Field mapping**:
 
 | SWMM Field | Source | Default |
 |------------|--------|---------|
 | Name | `Name_{ID}` | — |
-| FromNode | `FromNode` or `OR{ID}_up` | — |
-| ToNode | `ToNode` or `OR{ID}_dn` | — |
+| FromNode | Resolved from `Source` attribute | `OR{ID}_up` at orifice position |
+| ToNode | Resolved from `Receiver` attribute | `OR{ID}_dn` at LINK_OFFSET |
 | Type | — | `"BOTTOM"` |
 | InOffset | `InvElev_m` | 0.0 |
 | Qcoeff | `DischCoef` | 0.65 |
@@ -515,7 +515,23 @@ All link creators return `(layer, auto_junctions)` where `auto_junctions` is a l
 | Height | `Height_m` | 1.0 (if missing/zero) |
 | Width | `Width_m` | 1.0 (if missing/zero) |
 
-**Auto-junctions**: 2 per orifice, elevation=0.0, max_depth=3.0.
+**Spatial linking logic**:
+
+- **FromNode** (upstream): Resolved from the `Source` CSV attribute, which names the upstream sewer or canal route.
+  - Finds nearest junction on that route (excluding inline weir junctions with `CD` prefix) within 500m.
+  - If found, FromNode merges with that junction (same position = same node as the sewer endpoint).
+  - If `Source` is empty or no match: auto-generates `OR{ID}_up` at orifice position.
+  - For lake `Receiver`: FromNode snaps to nearest junction at the orifice position via `_get_or_create_junction`.
+
+- **ToNode** (downstream): Resolved from the `Receiver` CSV attribute.
+  - **Lake target**: if `Receiver` matches a lake name in `lake_index`, ToNode = lake junction `LK_{name}`.
+  - **Canal/river target**: finds nearest junction on the matching route (excluding `CD` prefix weir junctions) within 500m.
+    If ToNode position coincides with orifice position (< 2m), the ToNode is offset by `LINK_OFFSET` so the orifice link has non-zero length.
+  - **Fallback**: nearest any junction.
+
+**Weir junction exclusion**: `_find_nearest_junction_on_route()` is called with `exclude_prefix="CD"` to prevent orifices from accidentally connecting to inline weir junction nodes (`CD{id}_up`, `CD{id}_dn`).
+
+**Auto-junctions**: 2 per orifice (FromNode + ToNode), elevation=0.0, max_depth=3.0. Refined by DEM.
 
 ### `create_weirs(csv_path=None)`
 
