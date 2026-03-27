@@ -64,6 +64,12 @@ def run_sample():
         coord_registry[key] = mh.copy()
     print(f"  Pre-seeded with {len(coord_registry)} manhole coordinates")
 
+    # --- Build lake and outfall lookup indices ---
+    lake_index = conv._build_lake_index()
+    outfall_index = conv._build_outfall_index()
+    print(f"  Lake index: {len(lake_index)} lakes")
+    print(f"  Outfall index: {len(outfall_index)} outfalls")
+
     all_auto = []
 
     # --- Node layers ---
@@ -71,12 +77,10 @@ def run_sample():
     junctions_layer, _ = conv.create_junctions()
     storage_layer, _ = conv.create_storage()
 
-    # --- Link layers ---
-    print("\n[Link layers]")
-    conduits_layer, _ = conv.create_conduits()
-    pumps_layer, pj = conv.create_pumps()
-    orifices_layer, orj = conv.create_orifices()
-    all_auto += pj + orj
+    # --- Sewer conduits first (establishes sewer junctions in coord_registry) ---
+    print("\n[Sewer conduits]")
+    conduits_layer, sewer_aj = conv.create_conduits(coord_registry=coord_registry)
+    all_auto += sewer_aj
 
     # --- Congdap spatial index ---
     print("\n[Congdap spatial index]")
@@ -119,13 +123,24 @@ def run_sample():
     conduits_layer.updateExtents()
     print(f"  Merged rivers into CONDUITS -> {conduits_layer.featureCount()} total")
 
-    # --- Merge auto-junctions ---
-    print("\n[Merging auto-junctions]")
-    conv._add_auto_junctions(junctions_layer, all_auto)
-
-    # --- Outfalls ---
+    # --- Outfalls replace nearest junction on SewerLine route ---
+    # (runs after sewer+canal+river decomposition so all route junctions exist)
     print("\n[Outfalls]")
-    outfalls_layer = conv.create_outfalls()
+    outfalls_layer, outfall_replaces = conv.create_outfalls(
+        coord_registry=coord_registry)
+
+    # --- Orifices & pumps (need lake_index + full coord_registry) ---
+    print("\n[Link layers]")
+    pumps_layer, pj = conv.create_pumps(
+        coord_registry=coord_registry, lake_index=lake_index)
+    orifices_layer, orj = conv.create_orifices(
+        coord_registry=coord_registry, lake_index=lake_index)
+    all_auto += pj + orj
+
+    # --- Merge auto-junctions (exclude names replaced by outfalls) ---
+    print("\n[Merging auto-junctions]")
+    conv._add_auto_junctions(junctions_layer, all_auto,
+                             exclude_names=outfall_replaces)
 
     # --- DEM elevation refinement ---
     conv._refine_elevations(junctions_layer, storage_layer, outfalls_layer)

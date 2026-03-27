@@ -781,15 +781,23 @@ class Conversion:
         print(f"  STORAGE: {layer.featureCount()} features")
         return layer, []
 
-    def create_outfalls(self, csv_path=None):
+    def create_outfalls(self, csv_path=None, coord_registry=None):
         """Create SWMM OUTFALLS layer from outfalls CSV.
 
         Args:
             csv_path: Path to outfalls CSV. Defaults to self.outfalls_csv.
+            coord_registry: Junction coordinate registry. If provided and the
+                outfall has a SewerLine attribute, the outfall replaces the
+                nearest canal/sewer endpoint junction on that route: the
+                outfall is placed at the junction's exact coordinates, the
+                junction name is overwritten to the outfall name, and the old
+                junction name is returned so it can be excluded from the
+                JUNCTIONS layer.
 
-        Each row becomes an OUTFALL node. Field mapping:
-            Name -> Name, Elev_m -> Elevation, Type -> Type,
-            FixedStage -> FixedStage, FlapGate -> FlapGate.
+        Returns:
+            (layer, outfall_replaces) where outfall_replaces is a set of
+            junction names that were replaced by outfalls (should be excluded
+            from auto-junction creation).
         """
         csv_path = csv_path or self.outfalls_csv
         fields = [
@@ -804,6 +812,7 @@ class Conversion:
         layer = self._point_layer("outfalls", fields)
         pr = layer.dataProvider()
         feats = []
+        outfall_replaces = set()
 
         rows = self._read_csv(csv_path)
         for row in rows:
@@ -815,14 +824,35 @@ class Conversion:
                 continue
 
             name = row.get("Name", f"OF{row.get('ID', '0')}")
+            swmm_name = self._swmm_name(name)
             elev = self._safe_float(row.get("Elev_m", "0"))
             typ = row.get("Type", "FREE").strip() or "FREE"
             fixed = self._safe_float(row.get("FixedStage", ""))
             flap = row.get("FlapGate", "NO").strip() or "NO"
 
+            # Snap to nearest junction on SewerLine route.
+            # The outfall adopts the junction's name so conduit references
+            # (which already use that name) remain valid.
+            place_lon, place_lat = lon, lat
+            sewer_line = row.get("SewerLine", "").strip()
+            if coord_registry and sewer_line:
+                jname, dist = self._find_nearest_junction_on_route(
+                    coord_registry, lon, lat, sewer_line)
+                if jname:
+                    for (jlon, jlat), info in coord_registry.items():
+                        if info["name"] == jname:
+                            place_lon, place_lat = jlon, jlat
+                            break
+                    outfall_replaces.add(jname)
+                    swmm_name = jname  # adopt junction name
+                    print(f"    {name}: replaces junction '{jname}' on "
+                          f"route '{sewer_line}' (dist={dist:.1f}m)")
+            # No SewerLine: outfall stays at its own CSV position
+
             feat = QgsFeature(layer.fields())
-            feat.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(lon, lat)))
-            feat.setAttribute("Name", self._swmm_name(name))
+            feat.setGeometry(QgsGeometry.fromPointXY(
+                QgsPointXY(place_lon, place_lat)))
+            feat.setAttribute("Name", swmm_name)
             feat.setAttribute("Elevation", elev)
             feat.setAttribute("Type", typ)
             feat.setAttribute("FixedStage", fixed)
@@ -832,7 +862,7 @@ class Conversion:
         pr.addFeatures(feats)
         layer.updateExtents()
         print(f"  OUTFALLS: {layer.featureCount()} features")
-        return layer
+        return layer, outfall_replaces
 
     # =========================================================
     # Link layer creators
@@ -1061,18 +1091,10 @@ class Conversion:
             orifice_id = row.get("ID", "0")
             receiver = row.get("Receiver", "").strip()
 
-            # FromNode: orifice position, snapped to existing junction
-            from_node = self._get_or_create_junction(
-                coord_registry, lon, lat, f"OR{orifice_id}_up",
-                elevation=0.0, max_depth=3.0)
-            fkey = (round(lon, 6), round(lat, 6))
-            auto_junctions.append((from_node, lon, lat,
-                                   coord_registry[fkey]["elevation"],
-                                   coord_registry[fkey]["max_depth"]))
-
-            # ToNode: resolve from Receiver
+            # Resolve Receiver target first (determines FromNode strategy)
             to_lon, to_lat = lon + self.LINK_OFFSET, lat  # fallback
             to_node = f"OR{orifice_id}_dn"
+            is_lake_target = False
 
             if receiver:
                 lake_info = lake_index.get(receiver.lower())
@@ -1084,6 +1106,7 @@ class Conversion:
                         elevation=lake_info["bed_elev"],
                         max_depth=lake_info["bank_elev"] - lake_info["bed_elev"])
                     to_lon, to_lat = lake_info["lon"], lake_info["lat"]
+                    is_lake_target = True
                     print(f"    Orifice {row.get('Name','?')}: -> Lake {receiver}")
                 else:
                     # Receiver is a canal/river — find nearest junction with matching route
@@ -1091,7 +1114,6 @@ class Conversion:
                         coord_registry, lon, lat, receiver)
                     if jname and dist < 500:  # within 500m
                         to_node = jname
-                        # Find the position of the matched junction
                         for (jlon, jlat), info in coord_registry.items():
                             if info["name"] == jname:
                                 to_lon, to_lat = jlon, jlat
@@ -1107,6 +1129,32 @@ class Conversion:
                                     to_lon, to_lat = jlon, jlat
                                     break
                         print(f"    Orifice {row.get('Name','?')}: -> nearest {to_node} ({dist:.0f}m)")
+
+            # FromNode: orifice position
+            # For lake targets: snap to nearest existing junction (sewer endpoint)
+            # For canal/river targets: always create own junction at an offset
+            #   position so the orifice doesn't merge into an existing
+            #   sewer/canal junction and disrupt the canal topology.
+            #   Topology: sewer_end --- orifice link ---> canal_junction
+            from_lon, from_lat = lon, lat
+            if is_lake_target:
+                from_node = self._get_or_create_junction(
+                    coord_registry, lon, lat, f"OR{orifice_id}_up",
+                    elevation=0.0, max_depth=3.0)
+            else:
+                # Force a unique junction for this orifice by using an offset
+                # so it does not collide with any existing sewer/canal junction
+                from_lon = lon - self.LINK_OFFSET
+                from_node_name = self._swmm_name(
+                    row.get("Name", f"OR{orifice_id}"))
+                from_node = self._get_or_create_junction(
+                    coord_registry, from_lon, from_lat, from_node_name,
+                    elevation=0.0, max_depth=3.0)
+
+            fkey = (round(from_lon, 6), round(from_lat, 6))
+            auto_junctions.append((from_node, from_lon, from_lat,
+                                   coord_registry[fkey]["elevation"],
+                                   coord_registry[fkey]["max_depth"]))
 
             tkey = (round(to_lon, 6), round(to_lat, 6))
             if tkey not in coord_registry:
@@ -1279,18 +1327,36 @@ class Conversion:
                 depth = max(0.1, default_depth if default_depth > 0 else width / 2.0)
 
             # Register junctions for each point
+            route_name = row.get("Name", "").strip()
             junc_names = []
             for i, c in enumerate(coords):
                 lon, lat = c[0], c[1]
                 candidate = f"{prefix}J{fid}_{i}"
+
+                # For first/last vertex (canal endpoints), snap to nearby
+                # existing junctions within 5m to merge canal branches
+                if (i == 0 or i == len(coords) - 1) and coord_registry:
+                    snap_name, snap_dist = self._find_nearest_junction(
+                        coord_registry, lon, lat)
+                    if snap_name and snap_dist < 5.0:
+                        for (jlon, jlat), info in coord_registry.items():
+                            if info["name"] == snap_name:
+                                lon, lat = jlon, jlat
+                                candidate = snap_name
+                                break
+
                 jname = self._get_or_create_junction(
                     coord_registry, lon, lat, candidate,
                     elevation=bed_elev, max_depth=depth,
                 )
                 junc_names.append(jname)
+                key = (round(lon, 6), round(lat, 6))
+                # Tag with route name for subcatchment/orifice/pump matching
+                if "route" not in coord_registry[key] and route_name:
+                    coord_registry[key]["route"] = route_name
                 auto_junctions.append((jname, lon, lat,
-                                       coord_registry[(round(lon, 6), round(lat, 6))]["elevation"],
-                                       coord_registry[(round(lon, 6), round(lat, 6))]["max_depth"]))
+                                       coord_registry[key]["elevation"],
+                                       coord_registry[key]["max_depth"]))
 
             # --- Vertex-congdap pre-processing ---
             # When a congdap projects to a segment endpoint (fraction near
@@ -1334,6 +1400,17 @@ class Conversion:
                         cd_dn = self._get_or_create_junction(
                             coord_registry, cd_dn_lon, v_lat, cd_dn_name,
                             elevation=bed_elev, max_depth=depth)
+
+                        # Also register CD_dn at the original vertex coords
+                        # so that other canals branching here will merge to
+                        # CD_dn instead of creating a disconnected junction.
+                        v_key = (round(v_lon, 6), round(v_lat, 6))
+                        coord_registry[v_key] = {
+                            "name": cd_dn,
+                            "elevation": bed_elev,
+                            "max_depth": depth,
+                            "route": route_name,
+                        }
 
                         inline_weir_aj.append(
                             (up_name, up_lon, up_lat, bed_elev, depth))
@@ -1762,13 +1839,19 @@ class Conversion:
     # Auto-junction merge
     # =========================================================
 
-    def _add_auto_junctions(self, junctions_layer, auto_junction_entries):
+    def _add_auto_junctions(self, junctions_layer, auto_junction_entries,
+                            exclude_names=None):
         """Merge auto-generated nodes into JUNCTIONS layer (deduplicated by name).
 
-        Entries are (name, lon, lat, elevation, max_depth) tuples.
+        Args:
+            junctions_layer: JUNCTIONS QgsVectorLayer.
+            auto_junction_entries: list of (name, lon, lat, elevation, max_depth).
+            exclude_names: set of junction names to skip (e.g. replaced by outfalls).
         """
+        if exclude_names is None:
+            exclude_names = set()
         existing = {f.attribute("Name") for f in junctions_layer.getFeatures()}
-        seen = set(existing)
+        seen = set(existing) | exclude_names
         pr = junctions_layer.dataProvider()
         feats = []
         for name, lon, lat, elevation, max_depth in auto_junction_entries:
@@ -1787,7 +1870,11 @@ class Conversion:
         if feats:
             pr.addFeatures(feats)
             junctions_layer.updateExtents()
-        print(f"  Auto-junctions added: {len(feats)} new ({len(seen)} total)")
+        skipped = len(exclude_names)
+        msg = f"  Auto-junctions added: {len(feats)} new ({len(seen)} total)"
+        if skipped:
+            msg += f" ({skipped} excluded as outfalls)"
+        print(msg)
 
     # =========================================================
     # Main orchestration
@@ -1879,13 +1966,15 @@ class Conversion:
         conduits_layer.updateExtents()
         print(f"  Merged rivers into CONDUITS → {conduits_layer.featureCount()} total")
 
-        # --- Merge auto-junctions ---
-        print("\n[Merging auto-junctions]")
-        self._add_auto_junctions(junctions_layer, all_auto)
-
         # --- Outfalls ---
         print("\n[Outfall]")
-        outfalls_layer = self.create_outfalls()
+        outfalls_layer, outfall_replaces = self.create_outfalls(
+            coord_registry=coord_registry)
+
+        # --- Merge auto-junctions ---
+        print("\n[Merging auto-junctions]")
+        self._add_auto_junctions(junctions_layer, all_auto,
+                                 exclude_names=outfall_replaces)
 
         # --- DEM elevation refinement ---
         self._refine_elevations(junctions_layer, storage_layer, outfalls_layer)

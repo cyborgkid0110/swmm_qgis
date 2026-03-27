@@ -124,7 +124,7 @@ def run_hcm():
 
     # --- Outfalls ---
     print("\n[Outfalls]")
-    outfalls_layer = conv.create_outfalls()
+    outfalls_layer, _ = conv.create_outfalls()
 
     # --- DEM elevation refinement ---
     conv._refine_elevations(junctions_layer, storage_layer, outfalls_layer)
