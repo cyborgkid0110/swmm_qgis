@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>qEHVI Sedimentation Maintenance Optimization — Algorithm Flowchart</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #f0f2f5;
+    --text-dark: #1a1a2e;
+    --text-mid: #3a3a5c;
+    --text-light: #6b7280;
+
+    --layer1-bg: #e0f7f4; --layer1-border: #26a69a; --layer1-accent: #00897b;
+    --layer2-bg: #dbeafe; --layer2-border: #3b82f6; --layer2-accent: #1d4ed8;
+    --layer3-bg: #fef3c7; --layer3-border: #f59e0b; --layer3-accent: #d97706;
+    --layer4-bg: #fce7f3; --layer4-border: #ec4899; --layer4-accent: #be185d;
+    --layer5-bg: #ede9fe; --layer5-border: #8b5cf6; --layer5-accent: #6d28d9;
+    --layer6-bg: #d1fae5; --layer6-border: #10b981; --layer6-accent: #047857;
+
+    --node-bg: #ffffff;
+    --node-shadow: rgba(0,0,0,0.08);
+    --start-bg: #1a1a2e;
+
+    --font-main: 'Be Vietnam Pro', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --node-min: 130px;
+    --node-max: 190px;
+    --arrow-len: 28px;
+    --layer-pad-left: 76px;
+    --diamond-w: 120px;
+    --diamond-h: 80px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: var(--font-main);
+    color: var(--text-dark);
+    min-height: 100vh;
+    padding: 28px 16px 56px;
+  }
+
+  .main-title {
+    text-align: center;
+    font-size: clamp(1rem, 3.5vw, 1.55rem);
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--text-dark);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    padding: 0 8px;
+  }
+  .main-subtitle {
+    text-align: center;
+    font-size: clamp(0.62rem, 1.8vw, 0.82rem);
+    color: var(--text-light);
+    font-family: var(--font-mono);
+    margin-bottom: 28px;
+  }
+
+  .section-heading {
+    max-width: 1200px;
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .section-heading h2 {
+    font-size: clamp(0.82rem, 2.2vw, 1.05rem);
+    font-weight: 700;
+  }
+  .s-badge {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+  }
+  .s-badge-f1 { background: var(--layer1-bg); color: var(--layer1-accent); border: 1px solid var(--layer1-border); }
+  .s-badge-f2 { background: var(--layer4-bg); color: var(--layer4-accent); border: 1px solid var(--layer4-border); }
+
+  .section-desc {
+    max-width: 1200px;
+    margin: 0 auto 18px;
+    font-size: clamp(0.7rem, 1.6vw, 0.8rem);
+    color: var(--text-mid);
+    line-height: 1.6;
+  }
+  .section-divider {
+    max-width: 1200px;
+    margin: 44px auto 28px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, #d1d5db 30%, #d1d5db 70%, transparent 100%);
+  }
+
+  /* ═══════════ SNAKE CONTAINER ═══════════ */
+  .snake-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .flow1-figure {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 8px;
+    border-radius: 14px;
+    border: 1.5px solid rgba(0,0,0,0.08);
+    background: #f8f9fa;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .flow1-figure svg {
+    display: block;
+    min-width: 920px;
+    width: 100%;
+    height: auto;
+  }
+
+  .layer {
+    position: relative;
+    border: 2.5px solid;
+    border-radius: 14px;
+    padding: 24px 20px 24px var(--layer-pad-left);
+    display: flex;
+    align-items: center;
+    min-height: 100px;
+  }
+  .layer + .layer { margin-top: -1px; }
+
+  .layer-label {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: calc(var(--layer-pad-left) - 16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-weight: 700;
+    font-size: clamp(0.56rem, 1.2vw, 0.72rem);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    border-right: 2px solid;
+    border-radius: 12px 0 0 12px;
+    opacity: 0.85;
+    padding: 8px 0;
+    white-space: nowrap;
+  }
+
+  .layer-1 { background: var(--layer1-bg); border-color: var(--layer1-border); }
+  .layer-1 .layer-label { color: var(--layer1-accent); border-color: var(--layer1-border); }
+  .layer-2 { background: var(--layer2-bg); border-color: var(--layer2-border); }
+  .layer-2 .layer-label { color: var(--layer2-accent); border-color: var(--layer2-border); }
+  .layer-3 { background: var(--layer3-bg); border-color: var(--layer3-border); }
+  .layer-3 .layer-label { color: var(--layer3-accent); border-color: var(--layer3-border); }
+  .layer-4 { background: var(--layer4-bg); border-color: var(--layer4-border); }
+  .layer-4 .layer-label { color: var(--layer4-accent); border-color: var(--layer4-border); }
+  .layer-5 { background: var(--layer5-bg); border-color: var(--layer5-border); }
+  .layer-5 .layer-label { color: var(--layer5-accent); border-color: var(--layer5-border); }
+  .layer-6 { background: var(--layer6-bg); border-color: var(--layer6-border); }
+  .layer-6 .layer-label { color: var(--layer6-accent); border-color: var(--layer6-border); }
+
+  /* ═══════════ NODE ROW ═══════════ */
+  .node-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  .node-row.reverse { flex-direction: row-reverse; }
+
+  /* ═══════════ ARROWS ═══════════ */
+  .arrow {
+    flex-shrink: 0;
+    width: var(--arrow-len);
+    height: 2px;
+    background: var(--text-mid);
+    position: relative;
+  }
+  .arrow::after {
+    content: '';
+    position: absolute;
+    right: -1px; top: -4px;
+    border: 5px solid transparent;
+    border-left: 7px solid var(--text-mid);
+  }
+  .reverse .arrow::after {
+    right: auto; left: -1px;
+    border-left: none;
+    border-right: 7px solid var(--text-mid);
+  }
+
+  .layer-connector {
+    position: relative;
+    height: 0;
+    display: flex;
+    justify-content: flex-end;
+    padding-right: 56px;
+    z-index: 2;
+  }
+  .layer-connector.left-side {
+    justify-content: flex-start;
+    padding-left: calc(var(--layer-pad-left) + 20px);
+    padding-right: 0;
+  }
+  .v-arrow {
+    width: 2px; height: 28px;
+    background: var(--text-mid);
+    position: relative;
+    margin-top: -14px;
+  }
+  .v-arrow::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: -4px;
+    border: 5px solid transparent;
+    border-top: 7px solid var(--text-mid);
+  }
+
+  /* ═══════════ NODES ═══════════ */
+  .node {
+    background: var(--node-bg);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: var(--node-min);
+    max-width: var(--node-max);
+    flex: 1 1 var(--node-min);
+    text-align: center;
+    box-shadow: 0 2px 8px var(--node-shadow);
+    border: 1.5px solid rgba(0,0,0,0.06);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  }
+  .node .step-id {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 600;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .node .step-name {
+    font-size: clamp(0.68rem, 1.3vw, 0.78rem);
+    font-weight: 600;
+    color: var(--text-dark);
+    line-height: 1.35;
+  }
+  .node .step-detail {
+    font-size: clamp(0.54rem, 1vw, 0.62rem);
+    color: var(--text-light);
+    margin-top: 3px;
+    font-family: var(--font-mono);
+    line-height: 1.3;
+  }
+
+  .node.start-node, .node.end-node {
+    background: var(--start-bg);
+    border-color: var(--start-bg);
+    border-radius: 50%;
+    width: 52px; height: 52px;
+    min-width: 52px; max-width: 52px;
+    flex: 0 0 52px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+  .node.start-node .step-name,
+  .node.end-node .step-name {
+    color: #fff;
+    font-size: 0.58rem;
+    font-weight: 700;
+  }
+  .node.start-node .play-icon {
+    width: 0; height: 0;
+    border-style: solid;
+    border-width: 5px 0 5px 9px;
+    border-color: transparent transparent transparent #fff;
+    margin-bottom: 2px;
+  }
+
+  /* ═══════════ DIAMONDS ═══════════ */
+  .diamond-wrapper {
+    flex: 0 0 var(--diamond-w);
+    width: var(--diamond-w);
+    height: var(--diamond-h);
+    position: relative;
+  }
+  .diamond {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: calc(var(--diamond-w) - 10px);
+    height: calc(var(--diamond-h) - 10px);
+    transform: translate(-50%, -50%) rotate(45deg);
+    background: var(--node-bg);
+    border: 2.5px solid;
+    box-shadow: 0 2px 8px var(--node-shadow);
+    border-radius: 5px;
+  }
+  .diamond-content {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: var(--diamond-w);
+    z-index: 1;
+  }
+  .diamond-content .step-id {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .diamond-content .step-name {
+    font-size: clamp(0.62rem, 1.2vw, 0.72rem);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .layer-1 .diamond { border-color: var(--layer1-border); }  .layer-1 .diamond-content .step-id { color: var(--layer1-accent); }
+  .layer-2 .diamond { border-color: var(--layer2-border); }  .layer-2 .diamond-content .step-id { color: var(--layer2-accent); }
+  .layer-3 .diamond { border-color: var(--layer3-border); }  .layer-3 .diamond-content .step-id { color: var(--layer3-accent); }
+  .layer-4 .diamond { border-color: var(--layer4-border); }  .layer-4 .diamond-content .step-id { color: var(--layer4-accent); }
+  .layer-5 .diamond { border-color: var(--layer5-border); }  .layer-5 .diamond-content .step-id { color: var(--layer5-accent); }
+  .layer-6 .diamond { border-color: var(--layer6-border); }  .layer-6 .diamond-content .step-id { color: var(--layer6-accent); }
+
+  /* ═══════════ LOOP-BACK ═══════════ */
+  .loop-back-row {
+    display: flex;
+    justify-content: center;
+    max-width: 1200px;
+    margin: -8px auto 4px;
+    position: relative;
+    z-index: 3;
+  }
+  .loop-back-label {
+    font-family: var(--font-mono);
+    font-size: clamp(0.52rem, 1.1vw, 0.62rem);
+    color: var(--layer4-accent);
+    background: var(--layer4-bg);
+    border: 1.5px solid var(--layer4-border);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  /* ═══════════ KPI FORMULA CARDS ═══════════ */
+  .formulas-panel {
+    max-width: 1200px;
+    margin: 32px auto 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 14px;
+  }
+  .formula-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 18px;
+    border: 1.5px solid rgba(0,0,0,0.06);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .formula-card h4 {
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .formula-card .f-badge {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .formula-card p {
+    font-size: 0.7rem;
+    color: var(--text-mid);
+    line-height: 1.55;
+  }
+  .formula-card code {
+    font-family: var(--font-mono);
+    font-size: clamp(0.52rem, 1.1vw, 0.64rem);
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text-dark);
+    word-break: break-all;
+  }
+  .f1-badge { background: #fef2f2; color: #dc2626; }
+  .f2-badge { background: #eff6ff; color: #2563eb; }
+  .f3-badge { background: #f0fdf4; color: #16a34a; }
+
+  /* ═══════════ LEGEND ═══════════ */
+  .legend {
+    max-width: 1200px;
+    margin: 24px auto 0;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 14px 18px;
+    background: #fff;
+    border-radius: 12px;
+    border: 1.5px solid rgba(0,0,0,0.06);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    align-items: center;
+  }
+  .legend-title { font-weight: 700; font-size: 0.76rem; }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.68rem;
+    color: var(--text-mid);
+  }
+  .legend-rect {
+    width: 24px; height: 16px;
+    background: #fff;
+    border: 1.5px solid #ccc;
+    border-radius: 3px;
+  }
+  .legend-diamond-box {
+    width: 14px; height: 14px;
+    background: #fff;
+    border: 2px solid var(--layer3-border);
+    transform: rotate(45deg);
+    border-radius: 2px;
+  }
+  .legend-circle {
+    width: 16px; height: 16px;
+    background: var(--start-bg);
+    border-radius: 50%;
+  }
+  .legend-arrow-line {
+    width: 22px; height: 2px;
+    background: var(--text-mid);
+    position: relative;
+  }
+  .legend-arrow-line::after {
+    content: '';
+    position: absolute;
+    right: -1px; top: -3px;
+    border: 4px solid transparent;
+    border-left: 5px solid var(--text-mid);
+  }
+  .legend-ref {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    color: var(--text-light);
+  }
+
+  /* ═══════════════════════════════════════════════
+     TABLET (≤ 960px) — compact horizontal
+     ═══════════════════════════════════════════════ */
+  @media (max-width: 960px) {
+    :root {
+      --node-min: 105px;
+      --node-max: 155px;
+      --arrow-len: 18px;
+      --layer-pad-left: 56px;
+      --diamond-w: 100px;
+      --diamond-h: 68px;
+    }
+    .layer { padding: 18px 14px 18px var(--layer-pad-left); min-height: 88px; }
+    .node-row { gap: 6px; }
+    .node { padding: 8px 10px; }
+    .node.start-node, .node.end-node {
+      width: 44px; height: 44px; min-width: 44px; max-width: 44px; flex-basis: 44px;
+    }
+    .layer-connector { padding-right: 40px; }
+    .layer-connector.left-side { padding-left: calc(var(--layer-pad-left) + 14px); }
+  }
+
+  /* ═══════════════════════════════════════════════
+     MOBILE (≤ 680px) — vertical flow
+     ═══════════════════════════════════════════════ */
+  @media (max-width: 680px) {
+    :root {
+      --layer-pad-left: 14px;
+    }
+    body { padding: 16px 10px 40px; }
+
+    .layer {
+      padding: 0 var(--layer-pad-left) 16px;
+      flex-direction: column;
+      min-height: auto;
+      border-radius: 10px;
+    }
+
+    .layer-label {
+      position: relative;
+      writing-mode: horizontal-tb;
+      text-orientation: initial;
+      width: calc(100% + 2 * var(--layer-pad-left));
+      margin-left: calc(-1 * var(--layer-pad-left));
+      border-right: none;
+      border-bottom: 2px solid;
+      border-radius: 8px 8px 0 0;
+      padding: 8px 12px;
+      font-size: 0.64rem;
+      margin-bottom: 14px;
+      text-align: center;
+      justify-content: center;
+    }
+
+    .node-row, .node-row.reverse {
+      flex-direction: column !important;
+      align-items: center;
+      gap: 0;
+      width: 100%;
+    }
+
+    .node {
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
+      flex: none;
+    }
+
+    .node.start-node, .node.end-node {
+      width: 48px; height: 48px; min-width: 48px; max-width: 48px;
+    }
+
+    /* Arrows → vertical */
+    .arrow {
+      width: 2px;
+      height: 20px;
+      margin: 0;
+    }
+    .arrow::after {
+      right: auto;
+      left: -4px;
+      top: auto;
+      bottom: -1px;
+      border: 5px solid transparent;
+      border-top: 7px solid var(--text-mid);
+      border-left-color: transparent !important;
+      border-right-color: transparent !important;
+    }
+    .reverse .arrow::after {
+      border: 5px solid transparent;
+      border-top: 7px solid var(--text-mid);
+      left: -4px;
+      bottom: -1px;
+    }
+
+    /* Diamonds full-width */
+    .diamond-wrapper {
+      flex: none;
+      width: 100%;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .diamond { width: 88px; height: 58px; }
+    .diamond-content { width: 100%; }
+
+    /* Connectors centered */
+    .layer-connector, .layer-connector.left-side {
+      justify-content: center;
+      padding: 0;
+    }
+    .v-arrow { margin-top: -14px; }
+
+    .loop-back-row { margin: -6px auto 4px; }
+    .loop-back-label { padding: 4px 10px; }
+
+    .legend { gap: 10px; padding: 12px 14px; }
+    .legend-ref { margin-left: 0; width: 100%; }
+  }
+
+  /* ═══════════════════════════════════════════════
+     VERY SMALL (≤ 400px)
+     ═══════════════════════════════════════════════ */
+  @media (max-width: 400px) {
+    body { padding: 10px 6px 28px; }
+    .layer { padding: 0 8px 12px; border-width: 2px; }
+    .layer-label {
+      width: calc(100% + 16px);
+      margin-left: -8px;
+    }
+    .node { padding: 8px 8px; border-radius: 8px; }
+    .formula-card { padding: 14px; }
+    .legend { padding: 10px 10px; }
+  }
+
+  /* ═══════════════════════════════════════════════
+     PRINT
+     ═══════════════════════════════════════════════ */
+  @media print {
+    body { background: #fff; padding: 12px; }
+    .node:hover { transform: none; box-shadow: 0 2px 8px var(--node-shadow); }
+    .layer { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1 class="main-title">Pipeline qEHVI algorithm — Sedimentation maintenance optimization</h1>
+<p class="main-subtitle">qEHVI Sedimentation Maintenance Optimization — Snake Flow Diagram</p>
+
+<!-- ═══════════ FLOW 1 ═══════════ -->
+<div class="section-heading">
+  <span class="s-badge s-badge-f1">Flow 1</span>
+  <h2>Flood Warning & Sedimentation Solution Proposal (qEHVI Optimization Loop)</h2>
+</div>
+<p class="section-desc">
+  Bayesian optimization loop using BoTorch qEHVI: scenario input → initial sampling → SWMM evaluation → GP surrogate fitting → qEHVI acquisition (BoTorch) → discretize → Pareto front update → convergence check. Decision variable x ∈ {0,1}ᴺ (binary maintenance selection for N sediment monitoring points), relaxed to [0,1]ᴺ for GP fitting.
+</p>
+
+<div class="flow1-figure" role="img" aria-label="qEHVI-SWMM Multi-Objective Optimization Flowchart">
+<svg viewBox="0 0 920 900" xmlns="http://www.w3.org/2000/svg">
+<title>qEHVI-SWMM Multi-Objective Optimization Flowchart</title>
+<desc>Flowchart for sedimentation maintenance optimization using qEHVI algorithm combined with SWMM hydraulic simulation</desc>
+<style>
+  .f1-layer-bg { stroke-width: 2; }
+  .f1-layer-label { font-family: 'Be Vietnam Pro', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; }
+  .f1-node-box { fill: #ffffff; stroke: #d1d5db; stroke-width: 0.8; }
+  .f1-node-title { font-family: 'Be Vietnam Pro', sans-serif; font-size: 12px; font-weight: 500; fill: #1a1a2e; }
+  .f1-node-detail { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; fill: #6b7280; }
+  .f1-arr-line { stroke: #6b7280; stroke-width: 1.2; fill: none; }
+  .f1-diamond-shape { fill: #ffffff; stroke: #6b7280; stroke-width: 1.2; }
+  .f1-circle-node { stroke-width: 1.5; }
+  .f1-circle-text { font-family: 'Be Vietnam Pro', sans-serif; font-size: 12px; font-weight: 500; }
+  .f1-label-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; fill: #6b7280; }
+</style>
+<defs>
+<marker id="f1-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<rect x="50" y="10" width="840" height="130" rx="14" ry="14" fill="#e0f7f4" stroke="#26a69a" class="f1-layer-bg"/>
+<text x="70" y="35" class="f1-layer-label" fill="#00897b">Step 1 — Input data</text>
+
+<circle cx="100" cy="80" r="24" fill="#1a1a2e" class="f1-circle-node" stroke="#1a1a2e"/>
+<text x="100" y="84" text-anchor="middle" class="f1-circle-text" fill="#fff">Start</text>
+<line x1="124" y1="80" x2="158" y2="80" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="166" y="52" width="150" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="241" y="72" text-anchor="middle" class="f1-node-title">Scenario input</text>
+<text x="241" y="86" text-anchor="middle" class="f1-node-detail">Rainfall, sedimentation,</text>
+<text x="241" y="97" text-anchor="middle" class="f1-node-detail">discharge params</text>
+<line x1="316" y1="80" x2="346" y2="80" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="354" y="52" width="155" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="431" y="72" text-anchor="middle" class="f1-node-title">Hydraulic model</text>
+<text x="431" y="86" text-anchor="middle" class="f1-node-detail">sample_region.inp</text>
+<text x="431" y="97" text-anchor="middle" class="f1-node-detail">base model</text>
+<line x1="509" y1="80" x2="539" y2="80" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="547" y="52" width="150" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="622" y="72" text-anchor="middle" class="f1-node-title">Initial samples</text>
+<text x="622" y="86" text-anchor="middle" class="f1-node-detail">sample_region.inp</text>
+<text x="622" y="97" text-anchor="middle" class="f1-node-detail">base model</text>
+<line x1="697" y1="80" x2="727" y2="80" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="735" y="52" width="135" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="802" y="72" text-anchor="middle" class="f1-node-title">Scenario builder</text>
+<text x="802" y="86" text-anchor="middle" class="f1-node-detail">sample_region.inp</text>
+<text x="802" y="97" text-anchor="middle" class="f1-node-detail">base model</text>
+
+<line x1="802" y1="108" x2="802" y2="170" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="50" y="150" width="840" height="120" rx="14" ry="14" fill="#dbeafe" stroke="#3b82f6" class="f1-layer-bg"/>
+<text x="70" y="175" class="f1-layer-label" fill="#1d4ed8">Step 2 — KPI evaluation</text>
+
+<rect x="700" y="192" width="170" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="785" y="212" text-anchor="middle" class="f1-node-title">Run SWMM simulation</text>
+<text x="785" y="226" text-anchor="middle" class="f1-node-detail">pyswmm engine/</text>
+<text x="785" y="237" text-anchor="middle" class="f1-node-detail">multi-processing</text>
+<line x1="700" y1="220" x2="666" y2="220" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="496" y="192" width="162" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="577" y="212" text-anchor="middle" class="f1-node-title">Analyze result</text>
+<text x="577" y="226" text-anchor="middle" class="f1-node-detail">Extract flood vol,</text>
+<text x="577" y="237" text-anchor="middle" class="f1-node-detail">flow rate, sediment</text>
+<line x1="496" y1="220" x2="462" y2="220" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="284" y="192" width="170" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="369" y="212" text-anchor="middle" class="f1-node-title">KPI evaluation</text>
+<text x="369" y="226" text-anchor="middle" class="f1-node-detail">Extract flood vol, flow</text>
+<text x="369" y="237" text-anchor="middle" class="f1-node-detail">rate from .rpt/.out</text>
+
+<line x1="369" y1="248" x2="369" y2="310" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="50" y="290" width="840" height="120" rx="14" ry="14" fill="#fef3c7" stroke="#f59e0b" class="f1-layer-bg"/>
+<text x="70" y="315" class="f1-layer-label" fill="#d97706">Step 3.1 — qEHVI optimization algorithm</text>
+
+<rect x="240" y="332" width="170" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="325" y="352" text-anchor="middle" class="f1-node-title">Fit GP surrogate</text>
+<text x="325" y="366" text-anchor="middle" class="f1-node-detail">Train Gaussian Process</text>
+<text x="325" y="377" text-anchor="middle" class="f1-node-detail">on KPI data</text>
+<line x1="410" y1="360" x2="440" y2="360" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="448" y="332" width="170" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="533" y="352" text-anchor="middle" class="f1-node-title">qEHVI acquisition</text>
+<text x="533" y="366" text-anchor="middle" class="f1-node-detail">Compute acquisition fn</text>
+<text x="533" y="377" text-anchor="middle" class="f1-node-detail">Expected HV Improvement</text>
+<line x1="618" y1="360" x2="648" y2="360" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="656" y="332" width="170" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="741" y="352" text-anchor="middle" class="f1-node-title">Optimize + Select batch</text>
+<text x="741" y="366" text-anchor="middle" class="f1-node-detail">Optimize acquisition fn,</text>
+<text x="741" y="377" text-anchor="middle" class="f1-node-detail">select q new candidates</text>
+
+<line x1="741" y1="388" x2="741" y2="450" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="50" y="430" width="840" height="120" rx="14" ry="14" fill="#fce7f3" stroke="#ec4899" class="f1-layer-bg"/>
+<text x="70" y="455" class="f1-layer-label" fill="#be185d">Step 3.2 — Evaluate + Update new solutions</text>
+
+<rect x="688" y="472" width="170" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="773" y="492" text-anchor="middle" class="f1-node-title">Discretize solutions</text>
+<text x="773" y="506" text-anchor="middle" class="f1-node-detail">Round continuous vars</text>
+<text x="773" y="517" text-anchor="middle" class="f1-node-detail">to binary vector {0,1}</text>
+<line x1="688" y1="500" x2="658" y2="500" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="490" y="472" width="160" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="570" y="492" text-anchor="middle" class="f1-node-title">Scenario builder</text>
+<text x="570" y="506" text-anchor="middle" class="f1-node-detail">q binary vectors →</text>
+<text x="570" y="517" text-anchor="middle" class="f1-node-detail">q modified .inp</text>
+<line x1="490" y1="500" x2="460" y2="500" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="280" y="472" width="172" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="366" y="492" text-anchor="middle" class="f1-node-title">Evaluate via SWMM</text>
+<text x="366" y="506" text-anchor="middle" class="f1-node-detail">q binary vectors →</text>
+<text x="366" y="517" text-anchor="middle" class="f1-node-detail">q modified .inp</text>
+<line x1="280" y1="500" x2="250" y2="500" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="78" y="472" width="164" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="160" y="492" text-anchor="middle" class="f1-node-title">Update Pareto front</text>
+<text x="160" y="506" text-anchor="middle" class="f1-node-detail">Non-dominated filtering</text>
+<text x="160" y="517" text-anchor="middle" class="f1-node-detail">on {0,1}ᴺ solutions</text>
+
+<path d="M160,528 L160,570 L620,570 L620,598" class="f1-arr-line" fill="none" marker-end="url(#f1-arrow)"/>
+
+<polygon points="540,640 620,600 700,640 620,680" class="f1-diamond-shape"/>
+<text x="620" y="636" text-anchor="middle" class="f1-node-title">End</text>
+<text x="620" y="651" text-anchor="middle" class="f1-node-title">optimization?</text>
+
+<path d="M540,640 L40,640 L40,360 L238,360" class="f1-arr-line" fill="none" marker-end="url(#f1-arrow)"/>
+<text x="400" y="635" class="f1-label-text">No</text>
+
+<line x1="620" y1="680" x2="620" y2="740" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+<text x="635" y="715" class="f1-label-text">Yes</text>
+
+<rect x="50" y="720" width="840" height="120" rx="14" ry="14" fill="#d1fae5" stroke="#10b981" class="f1-layer-bg"/>
+<text x="70" y="745" class="f1-layer-label" fill="#047857">Step 4 — Output data</text>
+
+<rect x="600" y="762" width="170" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="685" y="782" text-anchor="middle" class="f1-node-title">Extract Pareto set</text>
+<text x="685" y="796" text-anchor="middle" class="f1-node-detail">Non-dominated 1st</text>
+<text x="685" y="807" text-anchor="middle" class="f1-node-detail">rank solutions</text>
+<line x1="600" y1="790" x2="566" y2="790" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<rect x="376" y="762" width="182" height="56" rx="8" ry="8" class="f1-node-box"/>
+<text x="467" y="782" text-anchor="middle" class="f1-node-title">Generate report</text>
+<text x="467" y="796" text-anchor="middle" class="f1-node-detail">Export JSON: sed_points,</text>
+<text x="467" y="807" text-anchor="middle" class="f1-node-detail">KPI, num/vol flood</text>
+<line x1="376" y1="790" x2="338" y2="790" class="f1-arr-line" marker-end="url(#f1-arrow)"/>
+
+<circle cx="308" cy="790" r="24" fill="#1a1a2e" class="f1-circle-node" stroke="#1a1a2e"/>
+<text x="308" y="794" text-anchor="middle" class="f1-circle-text" fill="#fff">End</text>
+
+</svg>
+</div>
+
+<!-- ═══════════ FLOW 2 ═══════════ -->
+<div class="section-divider"></div>
+
+<div class="section-heading">
+  <span class="s-badge s-badge-f2">Flow 2</span>
+  <h2>Algorithm Effectiveness Evaluation (Pre vs. Post Maintenance)</h2>
+</div>
+<p class="section-desc">
+  Parallel dual-scenario execution comparing the original (pre-maintenance) network with the post-sedimentation-resolved network. Both run through SWMM independently and their KPI vectors are compared to quantify the optimization's effectiveness.
+</p>
+
+<div class="snake-container">
+
+  <!-- LAYER 1 (L→R): Setup -->
+  <div class="layer layer-4">
+    <div class="layer-label">Layer 1 — Setup</div>
+    <div class="node-row">
+      <div class="node start-node"><div class="play-icon"></div><div class="step-name">START</div></div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step A</div>
+        <div class="step-name">Input A: Original Scenario</div>
+        <div class="step-detail">Pre-maintenance .inp (baseline)</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step B</div>
+        <div class="step-name">Input B: Resolved Scenario</div>
+        <div class="step-detail">Post-maintenance .inp (from Flow 1)</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step C</div>
+        <div class="step-name">Parallel Runner</div>
+        <div class="step-detail">ProcessPoolExecutor: dual SWMM</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layer-connector"><div class="v-arrow"></div></div>
+
+  <!-- LAYER 2 (R→L): Simulation -->
+  <div class="layer layer-2">
+    <div class="layer-label">Layer 2 — Simulation</div>
+    <div class="node-row reverse">
+      <div class="node">
+        <div class="step-id">Step D₁</div>
+        <div class="step-name">Run SWMM — Scenario A</div>
+        <div class="step-detail">Original network simulation</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step D₂</div>
+        <div class="step-name">Run SWMM — Scenario B</div>
+        <div class="step-detail">Resolved network simulation</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step E₁</div>
+        <div class="step-name">Parse Results A</div>
+        <div class="step-detail">Flood vol, flow rate, sediment</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step E₂</div>
+        <div class="step-name">Parse Results B</div>
+        <div class="step-detail">Flood vol, flow rate, sediment</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layer-connector left-side"><div class="v-arrow"></div></div>
+
+  <!-- LAYER 3 (L→R): Evaluate -->
+  <div class="layer layer-3">
+    <div class="layer-label">Layer 3 — Evaluate</div>
+    <div class="node-row">
+      <div class="node">
+        <div class="step-id">Step F₁</div>
+        <div class="step-name">Evaluate Network A</div>
+        <div class="step-detail">F₁ᴬ, F₂ᴬ, F₃ᴬ</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step F₂</div>
+        <div class="step-name">Evaluate Network B</div>
+        <div class="step-detail">F₁ᴮ, F₂ᴮ, F₃ᴮ</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="diamond-wrapper">
+        <div class="diamond"></div>
+        <div class="diamond-content">
+          <div class="step-id">Decision G</div>
+          <div class="step-name">ΔF significant?</div>
+        </div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step H</div>
+        <div class="step-name">Compare KPI Vectors</div>
+        <div class="step-detail">ΔF = F(A) − F(B) per objective</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layer-connector"><div class="v-arrow"></div></div>
+
+  <!-- LAYER 4 (R→L): Output -->
+  <div class="layer layer-6">
+    <div class="layer-label">Layer 4 — Output</div>
+    <div class="node-row reverse">
+      <div class="node">
+        <div class="step-id">Step I</div>
+        <div class="step-name">Effectiveness Report</div>
+        <div class="step-detail">% reduction in flood, capacity gain, sediment cleared</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node">
+        <div class="step-id">Step J</div>
+        <div class="step-name">Visualize Comparison</div>
+        <div class="step-detail">Pre/post maps, charts, Pareto overlay</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="node end-node"><div class="step-name">END</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════ KPI FORMULAS ═══════════ -->
+<div class="section-divider"></div>
+
+<div class="section-heading">
+  <h2>Objective Function — KPI Definitions</h2>
+</div>
+
+<div class="formulas-panel">
+  <div class="formula-card">
+    <h4><span class="f-badge f1-badge">F₁</span> Flood Severity Index</h4>
+    <p>
+      Quantifies flooding at nodes weighted by importance:<br>
+      <code>F₁ = Σᵢ wᵢ · [α · Vᵢᶠˡᵒᵒᵈ/Vᵢʳᵉᶠ + β · Tᵢᶠˡᵒᵒᵈ/Tʳᵉᶠ]</code><br><br>
+      <strong>SWMM outputs:</strong> flood volume <code>Vᵢ</code> (m³), flood duration <code>Tᵢ</code> (hrs) per node.<br>
+      <strong>Weights:</strong> α + β = 1; wᵢ from land use / population density.
+    </p>
+  </div>
+  <div class="formula-card">
+    <h4><span class="f-badge f2-badge">F₂</span> Drainage Capacity Index</h4>
+    <p>
+      Penalizes surcharge and low discharge across pipes:<br>
+      <code>F₂ = Σⱼ Lⱼ · [ζ·Iⱼ/Iⱼᶠᵘˡˡ + γ·Tⱼˢᵘʳᶜʰ/Tʳᵉᶠ − δ·Qⱼ/Qⱼᶠᵘˡˡ]</code><br><br>
+      <strong>SWMM outputs:</strong> inflow ratio, surcharge duration, discharge ratio per link.<br>
+      <strong>Weights:</strong> Lⱼ = pipe length (spatial weight); ζ, γ, δ tunable.
+    </p>
+  </div>
+  <div class="formula-card">
+    <h4><span class="f-badge f3-badge">F₃</span> Sedimentation–Maintenance Index</h4>
+    <p>
+      Long-term operational burden from sedimentation:<br>
+      <code>F₃ = Σⱼ [μ · SⱼLⱼ/Cⱼᶜᵃᵖ + ν · Cⱼᵐᵃⁱⁿᵗ/Cⱼᶜᵃᵖ]</code><br><br>
+      <strong>Sources:</strong> Sⱼ from SWMM WQ module or field survey (Di et al. SI).<br>
+      <strong>Weights:</strong> μ, ν tunable coefficients.
+    </p>
+  </div>
+</div>
+
+<!-- ═══════════ LEGEND ═══════════ -->
+<div class="legend">
+  <span class="legend-title">Legend:</span>
+  <div class="legend-item"><div class="legend-rect"></div> Process Step</div>
+  <div class="legend-item"><div class="legend-diamond-box"></div> Decision Node</div>
+  <div class="legend-item"><div class="legend-circle"></div> Start / End</div>
+  <div class="legend-item"><div class="legend-arrow-line"></div> Flow Direction</div>
+  <div class="legend-ref">Refs: method.md §3.1–3.4 · obj_func.md §3.2–3.4 · summary.md §3–5</div>
+</div>
+
+</body>
+</html>
