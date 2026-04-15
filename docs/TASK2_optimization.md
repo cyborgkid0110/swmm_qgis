@@ -191,9 +191,9 @@ The optimization produces a **JSON report** containing all Pareto-optimal soluti
 - [x] Build HTML algorithm flowchart (Sub-Task 1) → `docs/optimization/flowchart.html`
 - [x] Define decision variable (binary x), output JSON format, and flowchart revision
 - [x] Implement `InputqEHVISWMM` class (Step 1: scenario loading + .inp modification)
-- [ ] Implement `KPIEvaluation` class (Step 2: SWMM execution + KPI computation)
-- [ ] Implement `qEHVISWMM` class (Step 3: BO loop with qEHVI + Pareto update)
-- [ ] Implement `OutputqEHVISWMM` class (Step 4: Pareto extraction + JSON report)
+- [x] Implement `KPIEvaluation` class (Step 2: SWMM execution + KPI computation)
+- [x] Implement `qEHVISWMM` class (Step 3: BO loop with qEHVI + Pareto update)
+- [x] Implement `OutputqEHVISWMM` class (Step 4: Pareto extraction + JSON report)
 - [ ] Validate end-to-end loop on `sample_region.inp`
 - [ ] Benchmark qEHVI convergence on sample region (hypervolume vs. iterations)
 - [ ] Compare pre/post maintenance KPI vectors (Flow 2 validation)
