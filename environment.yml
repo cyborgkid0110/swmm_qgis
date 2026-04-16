@@ -11,3 +11,4 @@ dependencies:
   - torchaudio
   - botorch
   - pyswmm
+  - matplotlib
