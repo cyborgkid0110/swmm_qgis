@@ -135,7 +135,7 @@ class qEHVISWMM:
             model = self._fit_gp(train_X, neg_Y)
 
             # Reference point
-            ref_point = neg_Y.max(dim=0).values + self._ref_point_offset
+            ref_point = neg_Y.min(dim=0).values + self._ref_point_offset
 
             # Partitioning
             partitioning = NondominatedPartitioning(
@@ -174,7 +174,7 @@ class qEHVISWMM:
 
             # Compute hypervolume for convergence check
             neg_train_Y = -train_Y
-            ref_pt = neg_train_Y.max(dim=0).values + self._ref_point_offset
+            ref_pt = neg_train_Y.min(dim=0).values + self._ref_point_offset
             pareto_mask = NondominatedPartitioning(
                 ref_point=ref_pt, Y=neg_train_Y
             )

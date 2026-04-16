@@ -222,7 +222,7 @@ class KPIEvaluation:
             if props is None:
                 continue
 
-            length = props["length"]
+            length = props["length"] / 1000
             q_full = props.get("q_full", 1.0)
 
             peak_flow = abs(cstats.get("peak_flow", 0.0))
@@ -230,10 +230,11 @@ class KPIEvaluation:
 
             flow_ratio = peak_flow / q_full if q_full > 0 else 0.0
 
-            f2 += length * (
+            f2l = length * (
                 self._zeta * flow_ratio
                 + self._gamma * (t_surch / t_ref)
             )
+            f2 += f2l
 
         return f2
 
