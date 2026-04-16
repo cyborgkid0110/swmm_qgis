@@ -256,6 +256,15 @@ class qEHVISWMM:
             self._scenario_counter += 1
 
         results = self._kpi_eval.evaluate_batch(paths)
+
+        # Clean up temporary scenario files (.inp, .rpt, .out) after evaluation
+        for p in paths:
+            base = os.path.splitext(p)[0]
+            for ext in (".inp", ".rpt", ".out"):
+                f = base + ext
+                if os.path.isfile(f):
+                    os.remove(f)
+
         Y = torch.tensor(
             [r["kpi"] for r in results], **self._tkwargs
         )
