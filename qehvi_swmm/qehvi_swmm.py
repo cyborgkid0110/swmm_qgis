@@ -188,16 +188,17 @@ class qEHVISWMM:
             print(f"  New Y mean: [{', '.join(f'{v:.4f}' for v in new_Y.mean(dim=0).tolist())}]")
             print(f"  Total samples: {train_X.shape[0]}, HV: {current_hv:.4f}")
 
-            # Convergence check
-            if current_hv > best_hv:
-                best_hv = current_hv
-                stagnation_count = 0
-            else:
-                stagnation_count += 1
+            # Convergence check (disabled when patience == -1)
+            if self._patience >= 0:
+                if current_hv > best_hv:
+                    best_hv = current_hv
+                    stagnation_count = 0
+                else:
+                    stagnation_count += 1
 
-            if stagnation_count >= self._patience:
-                print(f"\n  Converged: HV stagnated for {self._patience} iterations.")
-                break
+                if stagnation_count >= self._patience:
+                    print(f"\n  Converged: HV stagnated for {self._patience} iterations.")
+                    break
 
             print()
 

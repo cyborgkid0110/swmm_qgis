@@ -91,6 +91,65 @@ Each entry in `solutions` is a **Pareto-optimal** maintenance strategy — no ot
 
 ---
 
+### `visualize(train_Y, hv_history, report_path, output_dir) -> str`
+
+Generate a 4-panel optimization result figure:
+
+| Panel | Content |
+|---|---|
+| Top-left | 3D scatter — all evaluated (blue) + Pareto front (green), view 1 |
+| Top-right | 3D scatter — same data, rotated view 2 |
+| Bottom-left | Hypervolume convergence line chart (red) |
+| Bottom-right | Table of 3 notable Pareto solutions (best F1, F2, F3) |
+
+```python
+fig_path = OutputqEHVISWMM.visualize(
+    train_Y=result["train_Y"],
+    hv_history=result["hv_history"],
+    report_path="temp_data/report.json",
+    output_dir="result/optimization",
+)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `train_Y` | `Tensor (n, 3)` | All evaluated KPI vectors |
+| `hv_history` | `list[float]` | Hypervolume at each BO iteration |
+| `report_path` | `str` | Path to the Pareto report JSON file |
+| `output_dir` | `str` | Directory to save the figure (default: `result/optimization`) |
+
+**Returns:** Path to the saved PNG file (`{output_dir}/optimization_results.png`).
+
+### `visualize_pareto(train_Y, report_path, output_dir) -> str`
+
+Generate a 5-panel Pareto front focused figure:
+
+| Panel | Content |
+|---|---|
+| Top-left | 3D scatter — all evaluated (blue) + Pareto front (green), view 1 |
+| Top-right | 3D scatter — same data, rotated view 2 |
+| Bottom-left | 2D projection: F1 vs F2 |
+| Bottom-center | 2D projection: F1 vs F3 |
+| Bottom-right | 2D projection: F2 vs F3 |
+
+```python
+fig_path = OutputqEHVISWMM.visualize_pareto(
+    train_Y=result["train_Y"],
+    report_path="temp_data/report.json",
+    output_dir="result/optimization",
+)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `train_Y` | `Tensor (n, 3)` | All evaluated KPI vectors |
+| `report_path` | `str` | Path to the Pareto report JSON file |
+| `output_dir` | `str` | Directory to save the figure (default: `result/optimization`) |
+
+**Returns:** Path to the saved PNG file (`{output_dir}/pareto_front.png`).
+
+---
+
 ## Usage Example
 
 ```python
@@ -129,3 +188,5 @@ path = OutputqEHVISWMM.generate_report(
 - `torch` — tensor operations
 - `botorch.utils.multi_objective.pareto.is_non_dominated` — Pareto filtering
 - `json` — report serialization
+- `matplotlib` — visualization (3D scatter, line chart, table)
+- `numpy` — array operations for visualization
