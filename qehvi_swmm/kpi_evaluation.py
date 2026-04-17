@@ -234,7 +234,7 @@ class KPIEvaluation:
                 self._zeta * flow_ratio
                 + self._gamma * (t_surch / t_ref)
             )
-            f2 += f2l
+            f2 -= f2l
 
         return f2
 

@@ -185,8 +185,15 @@ class qEHVISWMM:
             current_hv = hv_calc.compute(pareto_Y_neg) if pareto_Y_neg.shape[0] > 0 else 0.0
             hv_history.append(current_hv)
 
-            print(f"  New Y mean: [{', '.join(f'{v:.4f}' for v in new_Y.mean(dim=0).tolist())}]")
-            print(f"  Total samples: {train_X.shape[0]}, HV: {current_hv:.4f}")
+            new_Y_str = ', '.join(f'{v:.4f}' for v in new_Y.mean(dim=0).tolist())
+            n_samples = train_X.shape[0]
+
+            # Free cache in each iteration
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            print(f"  New Y mean: [{new_Y_str}]")
+            print(f"  Total samples: {n_samples}, HV: {current_hv:.4f}")
 
             # Convergence check (disabled when patience == -1)
             if self._patience >= 0:
@@ -205,6 +212,12 @@ class qEHVISWMM:
         n_iterations = min(iteration + 1, self._max_iter)
         print(f"\nOptimization complete. {n_iterations} iterations, "
               f"{train_X.shape[0]} total evaluations.")
+
+        # Move training data to CPU and free GPU memory
+        train_X = train_X.cpu()
+        train_Y = train_Y.cpu()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # --- Step 3: Extract Pareto set and generate report ---
         pareto_X, pareto_Y, pareto_indices = OutputqEHVISWMM.extract_pareto(

@@ -119,7 +119,8 @@ class OutputqEHVISWMM:
         gs = fig.add_gridspec(2, 6)
 
         # --- Top row: three 3D scatter plots with different viewing angles ---
-        views = [(30, 45), (30, 135), (15, 225)]
+        # Use a mirrored azimuth for View 2 so F3 appears on the left side.
+        views = [(30, 45), (30, -135), (15, 225)]
         for idx, (elev, azim) in enumerate(views):
             ax = fig.add_subplot(gs[0, idx * 2:(idx + 1) * 2], projection="3d")
             ax.scatter(
@@ -174,7 +175,7 @@ class OutputqEHVISWMM:
         )
         table.auto_set_font_size(False)
         table.set_fontsize(9)
-        table.scale(1.0, 1.8)
+        table.scale(2.0, 3.6)
         table.auto_set_column_width(list(range(len(col_labels))))
 
         # Style header row
@@ -230,7 +231,8 @@ class OutputqEHVISWMM:
         gs = fig.add_gridspec(2, 6)
 
         # --- Top row: three 3D scatter plots (each spans 2 columns) ---
-        views = [(30, 45), (30, 135), (15, 225)]
+        # Keep 3D view orientation consistent with visualize().
+        views = [(30, 45), (30, -135), (15, 225)]
         for idx, (elev, azim) in enumerate(views):
             ax = fig.add_subplot(gs[0, idx * 2:(idx + 1) * 2], projection="3d")
             ax.scatter(
