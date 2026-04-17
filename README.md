@@ -90,7 +90,7 @@ This project requires a **conda environment** with QGIS, GDAL, PyTorch, BoTorch,
 ```bash
 conda create -n qgis-env python=3.12
 conda activate qgis-env
-conda install -c conda-forge qgis gdal pytorch-gpu torchvision torchaudio botorch pyswmm
+conda install -c conda-forge qgis gdal pytorch-gpu torchvision torchaudio botorch pyswmm matplotlib
 ```
 
 > **Note:** On Linux without a GPU, replace `pytorch-gpu` with `pytorch`.
