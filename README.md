@@ -56,16 +56,19 @@ swmm_qgis/
 │   │   ├── conversion_hanoi.py     # Hanoi region (4,474 nodes + 4,471 links)
 │   │   ├── conversion_hcm.py       # HCM region (81,402 nodes + 88,364 links)
 │   │   └── conversion_sample.py    # Sample region (fast testing)
-│   └── tools/
-│       ├── csv_to_shp.py           # CSV → Shapefile for QGIS editing
-│       └── shp_to_csv.py           # Shapefile → CSV after QGIS editing
-│
-├── qehvi_swmm/                     # Optimization module (Task 2)
-│   ├── input.py                    # Step 1: .inp parsing + scenario modification
-│   ├── kpi_evaluation.py           # Step 2: SWMM execution + KPI computation
-│   ├── qehvi_swmm.py               # Step 3: BO loop (GP + qEHVI + Pareto update)
-│   ├── output.py                   # Step 4: Pareto extraction + JSON report + visualization
-│   └── config.yaml                 # KPI weights and optimization hyperparameters
+│   ├── tools/
+│   │   ├── csv_to_shp.py           # CSV → Shapefile for QGIS editing
+│   │   └── shp_to_csv.py           # Shapefile → CSV after QGIS editing
+│   ├── scenario/                   # Shared scenario .inp layer (Task 2)
+│   │   ├── builder.py                  # ScenarioBuilder — writes scenario .inp, computes v_max
+│   │   ├── extractor.py                # ScenarioExtractor — reads scenario state
+│   │   └── utils/                      # parser.py (syntax) + geometry.py (segment area)
+│   ├── qehvi_swmm/                 # Optimization pipeline (Task 2)
+│   │   ├── config.yaml                 # Default config: kpi / bo / constraints sections
+│   │   ├── input.py                    # Step 1: InputqEHVISWMM facade over ScenarioBuilder
+│   │   ├── kpi_evaluation.py           # Step 2: SWMM execution + KPI computation
+│   │   ├── qehvi_swmm.py               # Step 3: BO loop (GP + qEHVI + Pareto update)
+│   │   └── output.py                   # Step 4: Pareto extraction + JSON report + visualization
 │
 ├── docs/
 │   ├── TASK1_conversion.md         # Data conversion module plan
@@ -77,7 +80,7 @@ swmm_qgis/
 │   ├── swmm_output/                # Generated .inp files
 │   └── optimization/               # Pareto report (report.json) + figures
 │
-├── test_full.py                    # End-to-end optimization pipeline test
+├── test.py                         # End-to-end optimization pipeline test
 └── CLAUDE.md                       # Master project summary
 ```
 
@@ -187,14 +190,16 @@ The optimization uses BoTorch's **qLogExpectedHypervolumeImprovement** (qEHVI):
 9. Extract Pareto set → JSON report + visualizations
 ```
 
-Key hyperparameters in `qehvi_swmm/config.yaml`:
+Key hyperparameters in the `config.yaml` (`bo:` and `constraints:` sections):
 
 ```yaml
-optimization:
-  n_init: 16          # initial Sobol samples
+bo:
+  n_init: 16          # initial Sobol samples (post-rejection)
   max_iter: 50        # maximum BO iterations
   batch_size: 3       # candidates per iteration
   patience: 10        # early stop patience (-1 to disable)
+constraints:
+  maintenance_budget: 128.0   # A: total maintenance volume cap (m^3)
 ```
 
 ### Output
