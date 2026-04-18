@@ -1,6 +1,7 @@
 """End-to-end test of the qEHVI-SWMM optimization pipeline."""
 import os
-from qehvi_swmm import InputqEHVISWMM, KPIEvaluation, OutputqEHVISWMM, qEHVISWMM
+
+from src.qehvi_swmm import InputqEHVISWMM, KPIEvaluation, OutputqEHVISWMM, qEHVISWMM
 
 # Create test sedimentation CSV
 os.makedirs("temp_data", exist_ok=True)
@@ -18,13 +19,9 @@ inp = InputqEHVISWMM(
     output_dir="temp_data/scenarios",
 )
 
-# Step 2: KPI Evaluator
-sections = InputqEHVISWMM._parse_inp("models/Site_Drainage_Model.inp")
-sedimentation = dict(zip(
-    inp.conduit_names,
-    [0.2, 0.35, 0.4, 0.1, 0.3, 0.25, 0.15, 0.45, 0.25, 0.3, 0.2],
-))
-evaluator = KPIEvaluation(inp_sections=sections, sedimentation=sedimentation)
+# Step 2: KPI Evaluator — reuse parsed base sections from the builder
+sedimentation = inp.filled_depths
+evaluator = KPIEvaluation(inp_sections=inp.base_sections, sedimentation=sedimentation)
 
 # Step 3+4: Optimization
 optimizer = qEHVISWMM(input_module=inp, kpi_evaluator=evaluator)
