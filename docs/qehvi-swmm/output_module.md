@@ -1,6 +1,6 @@
 # OutputqEHVISWMM — Step 4: Pareto Extraction & JSON Report
 
-**Source:** `qehvi_swmm/output.py`
+**Source:** `src/qehvi_swmm/output.py`
 
 ---
 
@@ -63,15 +63,18 @@ path = OutputqEHVISWMM.generate_report(
 
 ```json
 {
+    "conduit_names": ["C1", "C2", "C3", "C4", "C5"],
     "solutions": [
         {
-            "sed_points": ["C1", "C5", "C9"],
-            "kpi": [2.58, 1680.5, 0.0],
+            "x": [0.0, 0.0, 2.13, 0.0, 1.40],
+            "total_volume_m3": 3.53,
+            "kpi": [2.58, 1680.5, 0.08],
             "num_flood": 8,
             "volume_flood": 23661.06
         },
         {
-            "sed_points": ["C1", "C3"],
+            "x": [1.05, 0.0, 0.0, 0.82, 0.20],
+            "total_volume_m3": 2.07,
             "kpi": [2.59, 1600.2, 0.13],
             "num_flood": 8,
             "volume_flood": 23700.15
@@ -82,10 +85,12 @@ path = OutputqEHVISWMM.generate_report(
 
 | Field | Type | Description |
 |---|---|---|
-| `sed_points` | `list[str]` | Conduit names where `x[i] = 1` (selected for maintenance) |
+| `conduit_names` | `list[str]` (root-level) | Ordered monitoring-conduit names. Same index space as every `x` vector — stored once at the root, not per solution. |
+| `x` | `list[float]` | Full dense maintenance-volume vector (m³), length `N`. `x[j]` is the volume removed at `conduit_names[j]`. Exact optimizer values — zeros are not filtered. |
+| `total_volume_m3` | `float` | `sum(x)`; respects the `maintenance_budget` constraint within L-BFGS-B tolerance |
 | `kpi` | `list[float]` | Objective values `[F1, F2, F3]` for this solution |
 | `num_flood` | `int` | Number of junctions where flooding occurred |
-| `volume_flood` | `float` | Total flood volume across all junctions (m3) |
+| `volume_flood` | `float` | Total flood volume across all junctions (m³) |
 
 Each entry in `solutions` is a **Pareto-optimal** maintenance strategy — no other solution is better in all three objectives simultaneously. The decision-maker can select among these based on preference or budget constraints.
 
@@ -100,7 +105,7 @@ Generate a 4-panel optimization result figure:
 | Top-left | 3D scatter — all evaluated (blue) + Pareto front (green), view 1 |
 | Top-right | 3D scatter — same data, rotated view 2 |
 | Bottom-left | Hypervolume convergence line chart (red) |
-| Bottom-right | Table of 3 notable Pareto solutions (best F1, F2, F3) |
+| Bottom-right | Table of 3 notable Pareto solutions (best F1, F2, F3). The "Solution" cell formats the dense `x` vector as `"name=volume"` pairs for positive entries only. |
 
 ```python
 fig_path = OutputqEHVISWMM.visualize(
@@ -153,11 +158,13 @@ fig_path = OutputqEHVISWMM.visualize_pareto(
 ## Usage Example
 
 ```python
-from qehvi_swmm.output import OutputqEHVISWMM
+from src.qehvi_swmm.output import OutputqEHVISWMM
 import torch
 
-# After optimization, given train_X and train_Y
-train_X = torch.tensor([[1,0,1,0,1], [0,0,0,0,0], [1,1,1,1,1]], dtype=torch.double)
+# After optimization, given train_X (continuous volumes, m^3) and train_Y (KPIs)
+train_X = torch.tensor([[0.0, 0.0, 2.13, 0.0, 1.40],
+                        [0.0, 0.0, 0.0, 0.0, 0.0],
+                        [1.05, 0.0, 0.0, 0.82, 0.20]], dtype=torch.double)
 train_Y = torch.tensor([[2.58, 1680, 0.13], [2.60, 1566, 0.80], [2.58, 1694, 0.0]], dtype=torch.double)
 
 # Extract Pareto front

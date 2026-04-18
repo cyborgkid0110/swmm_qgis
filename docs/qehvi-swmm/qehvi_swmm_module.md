@@ -1,7 +1,7 @@
 # qEHVISWMM — Step 3: Bayesian Optimization Loop
 
-**Source:** `qehvi_swmm/qehvi_swmm.py`
-**Config:** `qehvi_swmm/config.yaml` → `optimization` section
+**Source:** `src/qehvi_swmm/qehvi_swmm.py`
+**Config:** `src/qehvi_swmm/config.yaml` → `bo:` and `constraints:` sections
 
 ---
 
@@ -68,17 +68,21 @@ The loop follows the exact BoTorch pattern from the reference script `test.py`:
 ### Step 3.1 — Initial Sampling
 
 ```
-Sobol sequence in [0,1]^N → round to {0,1}^N → n_init binary vectors
+Scaled Sobol draws in [0, v_max]^N → reject any row with Σ x > A
+    → repeat until n_init accepted (max 1000 × n_init attempts)
     → InputqEHVISWMM.build_scenario() → KPIEvaluation.evaluate_batch()
     → train_X, train_Y
 ```
+
+If acceptance fails, the method raises with the actual A, Σ v_max, and attempt count — typically means `A` is too small relative to `Σ v_max` for the configured `N`.
 
 ### Step 3.2 — BO Iteration (repeated up to max_iter times)
 
 ```
 1. Fit GP surrogate
    - Negate Y (minimization → maximization for BoTorch)
-   - ModelListGP: one SingleTaskGP per objective with Standardize(m=1)
+   - ModelListGP: one SingleTaskGP per objective with
+     Normalize(d=N, bounds) input transform + Standardize(m=1) outcome transform
    - Fit via SumMarginalLogLikelihood
 
 2. Compute reference point
@@ -89,11 +93,12 @@ Sobol sequence in [0,1]^N → round to {0,1}^N → n_init binary vectors
    - qLogExpectedHypervolumeImprovement with SobolQMCNormalSampler
 
 4. Optimize acquisition
-   - optimize_acqf in [0,1]^N bounds
-   - Returns q continuous candidates
+   - optimize_acqf in [0, v_max]^N bounds
+   - inequality_constraints = [(arange(N), -ones(N), -A)] enforces Σ x_i ≤ A
+   - Returns q continuous candidates satisfying the budget
 
-5. Discretize + evaluate
-   - torch.round(candidate) → binary {0,1}^N
+5. Evaluate (no discretization — continuous throughout)
+   - clamp candidates to bounds (defensive against L-BFGS-B overshoot)
    - build_scenario() → evaluate_batch() → new KPI vectors
 
 6. Update dataset
@@ -126,11 +131,11 @@ This is transparent — the returned `train_Y` and `pareto_Y` contain the **orig
 
 ## Configuration
 
-All optimization hyperparameters are in `config.yaml` under the `optimization:` section:
+Optimization hyperparameters live under the `bo:` section of the `config.yaml`; the budget lives under `constraints:`:
 
 ```yaml
-optimization:
-  n_init: 16          # number of initial Sobol samples
+bo:
+  n_init: 16          # number of initial samples (post-rejection)
   max_iter: 50        # maximum BO iterations
   batch_size: 3       # q candidates per iteration (parallel SWMM evals)
   num_restarts: 20    # restarts for optimize_acqf
@@ -138,20 +143,24 @@ optimization:
   mc_samples: 256     # MC samples for qEHVI sampler
   patience: 5         # early stop if HV stagnates for this many iterations
   seed: 0             # random seed for Sobol sequence
-  ref_point_offset: 0.1  # offset added to worst objective for reference point
+  ref_point_offset: -0.1  # offset applied to worst negated objective for reference point
+
+constraints:
+  maintenance_budget: 128.0  # A: total maintenance volume cap (m^3)
 ```
 
-| Parameter | Description | Tuning guidance |
-|---|---|---|
-| `n_init` | Initial exploration budget | `2*(N+1)` is a common rule of thumb |
-| `max_iter` | Upper bound on BO iterations | Depends on SWMM runtime budget |
-| `batch_size` | Candidates per iteration (`q`) | Higher = more parallelism but less sample efficiency |
-| `num_restarts` | Multi-start L-BFGS-B restarts | More = better acquisition optimization, slower |
-| `raw_samples` | Random starting points for restarts | More = better coverage of acquisition landscape |
-| `mc_samples` | MC samples for qEHVI estimator | 128-512 typical; higher = lower variance |
-| `patience` | Early stopping patience | Lower = faster convergence detection, risk of premature stop |
-| `seed` | Reproducibility seed | Fixed for deterministic Sobol sequence |
-| `ref_point_offset` | Reference point margin | Small positive value; too large wastes HV computation |
+| Parameter | Section | Description | Tuning guidance |
+|---|---|---|---|
+| `n_init` | `bo` | Initial exploration budget | `2*(N+1)` is a common rule of thumb |
+| `max_iter` | `bo` | Upper bound on BO iterations | Depends on SWMM runtime budget |
+| `batch_size` | `bo` | Candidates per iteration (`q`) | Higher = more parallelism but less sample efficiency |
+| `num_restarts` | `bo` | Multi-start L-BFGS-B restarts | More = better acquisition optimization, slower |
+| `raw_samples` | `bo` | Random starting points for restarts | More = better coverage of acquisition landscape |
+| `mc_samples` | `bo` | MC samples for qEHVI estimator | 128-512 typical; higher = lower variance |
+| `patience` | `bo` | Early stopping patience | Lower = faster convergence detection, risk of premature stop |
+| `seed` | `bo` | Reproducibility seed | Fixed for deterministic Sobol sequence |
+| `ref_point_offset` | `bo` | Reference point margin | Small magnitude; too large wastes HV computation |
+| `maintenance_budget` | `constraints` | Sum-constraint budget `A` (m³) | Compare with `Σ v_max` logged at init. Typical: 20–50% of Σ v_max |
 
 ---
 
@@ -170,7 +179,7 @@ If HV does not improve for `patience` consecutive iterations, the loop terminate
 ## Usage Example
 
 ```python
-from qehvi_swmm import InputqEHVISWMM, KPIEvaluation, qEHVISWMM
+from src.qehvi_swmm import InputqEHVISWMM, KPIEvaluation, qEHVISWMM
 
 # Step 1: Setup input
 inp = InputqEHVISWMM(

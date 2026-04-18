@@ -1,7 +1,7 @@
 # KPIEvaluation — Step 2: SWMM Simulation & KPI Computation
 
-**Source:** `qehvi_swmm/kpi_evaluation.py`
-**Config:** `qehvi_swmm/config.yaml`
+**Source:** `src/qehvi_swmm/kpi_evaluation.py`
+**Config:** `src/qehvi_swmm/config.yaml` (sections `kpi`, `bo`, `constraints`)
 
 ---
 
@@ -131,13 +131,15 @@ A_{\mathrm{pipe}} = \pi R^2
 
 | Symbol | Source | Description |
 |---|---|---|
-| `R` | `[XSECTIONS]` Geom1 / 2 | Pipe radius (m) |
-| `h` | Sedimentation CSV `filled_depth` | Sediment depth (m) |
-| `A_sed` | Circular segment formula | Cross-sectional area of sediment |
+| `R` | `[XSECTIONS]` Geom1 / 2 | Pipe radius (m) — from base `.inp` |
+| `h` | **Scenario** `[XSECTIONS]` Geom2 | Remaining sediment depth (m) after any partial maintenance |
+| `A_sed` | Circular segment formula | Cross-sectional area of remaining sediment |
 | `A_pipe` | `π R²` | Full pipe cross-sectional area |
 | `μ` | `config.yaml → f3.mu` | Sedimentation weight |
 
-**F3 only counts conduits with `FILLED_CIRCULAR` shape** in the scenario `.inp` (i.e., conduits NOT maintained). Maintained conduits (kept as `CIRCULAR`) contribute 0. This makes F3 sensitive to the decision vector `x`.
+**F3 only counts conduits with `FILLED_CIRCULAR` shape** in the scenario `.inp`. Conduits written back to `CIRCULAR` by the scenario builder (fully cleaned, `x[i] = v_max[i]`) contribute 0.
+
+**Important:** `h` is read from the **scenario `[XSECTIONS]` Geom2**, not from the sedimentation CSV. `KPIEvaluation` delegates this lookup to `src.scenario.ScenarioExtractor.remaining_depth(conduit)` so that scenario-state semantics live in one place. Under partial maintenance (`0 < x[i] < v_max[i]`), the scenario builder writes `h' < filled_depth` back, and F3 reflects that reduced depth.
 
 > **Note:** The `ν` parameter is reserved in `config.yaml` for future maintenance cost terms but is currently unused.
 
@@ -145,27 +147,30 @@ A_{\mathrm{pipe}} = \pi R^2
 
 ## Configuration File
 
-**Path:** `qehvi_swmm/config.yaml`
+**Path:** `src/qehvi_swmm/config.yaml`. KPI weights live under the `kpi:` section (sibling to `bo:` and `constraints:`).
 
 ```yaml
-f1:
-  alpha: 0.5    # weight for flood volume component
-  beta: 0.5     # weight for flood duration component
-
-f2:
-  zeta: 0.5     # weight for average flow / capacity ratio
-  gamma: 0.5    # weight for surcharge duration
-  delta: 0.0    # reserved for future use
-
-f3:
-  mu: 0.5       # weight for sedimentation extent
-  nu: 0.5       # reserved for future maintenance cost term
+kpi:
+  f1:
+    alpha: 0.5    # weight for flood volume component
+    beta: 0.5     # weight for flood duration component
+  f2:
+    zeta: 0.5     # weight for average flow / capacity ratio
+    gamma: 0.5    # weight for surcharge duration
+    delta: 0.0    # reserved for future use
+  f3:
+    mu: 0.5       # weight for sedimentation extent
+    nu: 0.5       # reserved for future maintenance cost term
 ```
 
-Override at runtime by passing a `config` dict to the constructor:
+Override at runtime by passing a `config` dict (same three-section shape) to the constructor:
 
 ```python
-custom_config = {"f1": {"alpha": 0.7, "beta": 0.3}, "f2": {...}, "f3": {...}}
+custom_config = {
+    "kpi": {"f1": {"alpha": 0.7, "beta": 0.3}, "f2": {...}, "f3": {...}},
+    "bo": {...},
+    "constraints": {...},
+}
 evaluator = KPIEvaluation(sections, sedimentation, config=custom_config)
 ```
 
@@ -192,19 +197,26 @@ evaluator = KPIEvaluation(sections, sedimentation, config=custom_config)
 | Conduit shape, diameter | `[XSECTIONS]` | F2 (Q_full), F3 (C_cap) |
 | Node elevations | `[JUNCTIONS]`, `[OUTFALLS]` | F2 (pipe slope for Q_full) |
 
+### From scenario `.inp` (per-evaluation)
+
+| Data | Source | Used in |
+|---|---|---|
+| Remaining sediment depth per conduit | Scenario `[XSECTIONS]` Geom2 (written by `InputqEHVISWMM`) | F3 (h in `A_seg`) |
+| Scenario shape (FILLED_CIRCULAR vs CIRCULAR) | Scenario `[XSECTIONS]` | F3 (zero-contribution gate for fully cleaned conduits) |
+
 ### From sedimentation CSV (via InputqEHVISWMM)
 
 | Data | Used in |
 |---|---|
-| `filled_depth` per conduit | F3 (S_j, maintenance ratio) |
+| `filled_depth` per conduit | Only to enumerate the monitoring-conduit set for F3 and to define `v_max` in `InputqEHVISWMM`; **not** used as `h` in F3 |
 
 ---
 
 ## Usage Example
 
 ```python
-from qehvi_swmm.input import InputqEHVISWMM
-from qehvi_swmm.kpi_evaluation import KPIEvaluation
+from src.qehvi_swmm.input import InputqEHVISWMM
+from src.qehvi_swmm.kpi_evaluation import KPIEvaluation
 
 # Parse base model and setup sedimentation
 sections = InputqEHVISWMM._parse_inp("models/Site_Drainage_Model.inp")
