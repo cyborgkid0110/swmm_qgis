@@ -1,0 +1,8 @@
+subcatchment_id,population_density,land_use_score,road_density,facility_score
+S1,12500,0.85,14.2,8.3
+S2,9800,0.72,10.5,6.1
+S3,4200,0.35,5.8,2.7
+S4,7600,0.55,8.9,4.2
+S5,11200,0.78,12.1,7.5
+S6,3100,0.28,4.2,1.8
+S7,5500,0.48,6.8,3.4

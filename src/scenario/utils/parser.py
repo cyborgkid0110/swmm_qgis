@@ -23,9 +23,12 @@ def parse_inp(inp_path: str) -> OrderedDict:
 
     with open(inp_path, "r", encoding="utf-8") as f:
         for line in f:
-            m = re.match(r"^\[([A-Z_]+)\]", line.strip())
+            # SWMM allows mixed-case section headers (e.g. [Polygons] in files
+            # written by QGIS' export). Normalize to uppercase so downstream
+            # consumers can look sections up by a single canonical name.
+            m = re.match(r"^\[([A-Za-z_]+)\]", line.strip())
             if m:
-                current = m.group(1)
+                current = m.group(1).upper()
                 sections[current] = []
             else:
                 sections[current].append(line)
