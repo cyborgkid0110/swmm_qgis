@@ -1,17 +1,9 @@
-"""Shared config loader for qEHVI-SWMM.
+"""Shared config loader for BO-SWMM.
 
-The canonical config file lives at the ``src/qehvi_swmm/config.yaml`` and
-uses three top-level sections:
-
-    kpi:
-      f1: {alpha, beta}
-      f2: {zeta, gamma, delta}
-      f3: {mu, nu}
-    bo:
-      n_init, max_iter, batch_size, num_restarts, raw_samples, mc_samples,
-      patience, seed, ref_point_offset
-    constraints:
-      maintenance_budget
+The canonical config file lives at ``src/boswmm/config.yaml``. The
+structure is documented in that file; top-level sections include
+``optimization`` (mode + BO hyperparameters), ``constraints``
+(maintenance budget), and ``kpi`` (paths to the FROI config + data).
 
 A user-supplied ``config`` dict (same shape) can override at runtime.
 """
