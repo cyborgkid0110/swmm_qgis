@@ -1,178 +1,217 @@
-# REPORT ON PROPOSED COMPREHENSIVE OBJECTIVE FUNCTION FOR URBAN SEWER NETWORK EVALUATION
+# Objective Function — Flood Risk Overall Index (FROI)
+
+**Source:** `src/kpi/` (indicators, weights, aggregator, FROI orchestrator).
+**Config:** `src/kpi/config.yaml` (indicator thresholds, data paths, expert matrices).
 
 ---
 
-# 1. PROBLEM STATEMENT
+## 1. Framework
 
-## 1.1. Related Studies
+The objective function follows the **UNDRR/IPCC flood-risk assessment** convention. Four sub-indices are combined multiplicatively:
 
-Existing studies approach the problem of sewer network evaluation in a fragmented manner: some works focus on rehabilitation investment costs (Cunha et al., 2019; Pan et al., 2025), others assess economic damage (Jafar et al., 2022), while others examine pipe asset condition (Aljafari et al., 2022; Lisandro et al., 2024) or composite risk indices (Shakeel et al., 2025). Each approach provides a valuable perspective but has its own limitations:
+$$FROI = FHI \times FEI \times FVI \times (1 - FRI)$$
 
-- Pure economic objective functions ignore hydraulic constraints (self-cleaning velocity, Q/Q_full ratio), leading to low-cost solutions that are prone to sediment accumulation.
-- Isolated hydraulic indicators (flood volume, overflow duration) do not reflect economic impacts and long-term maintenance burdens.
-- Most studies have not integrated sedimentation as a dynamic state variable affecting both hydraulic capacity and operational costs.
-- Decision-making based on multiple discrete, unlinked KPIs lacks consistency and is difficult to apply in multi-objective optimization problems.
+| Sub-index | Group | Meaning |
+|---|---|---|
+| **FHI** | Hazard | Direct physical impact of flooding |
+| **FEI** | Exposure | People, property, infrastructure in the flood zone |
+| **FVI** | Vulnerability | Susceptibility of exposed elements to damage |
+| **FRI** | Resilience | Capacity to cope, adapt, recover |
 
-This reality creates an urgent need for a comprehensive objective function capable of simultaneously integrating three evaluation dimensions — network condition, sedimentation, and flooding — to serve sewer network optimization problems.
+Each sub-index is a weighted sum of indicators, standardized to [0, 1]:
 
-## 1.2. Research Objectives
+$$FI = \sum_{m=1}^{M} \rho_m \cdot x_m$$
 
-This report aims at two specific objectives:
-
-1. Review and critically analyze KPIs and objective functions used in urban sewer network research.
-2. Propose a multi-component objective function integrating hydraulics (F₁), drainage capacity (F₂), and sedimentation–maintenance (F₃).
-
----
-
-# 2. REVIEW OF OBJECTIVE FUNCTIONS FOR SEWER NETWORK EVALUATION
-
-## 2.1. Studies Reviewed
-
-Table 1 summarizes the reviewed studies, classified by KPI or objective function used and the KPI calculation method.
-
-**Table 1. Summary of KPIs and Objective Functions from Reviewed Studies**
-
-| No. | Paper Title | KPI / Objective Function | Calculation Method |
-|-----|-------------|--------------------------|-------------------|
-| 1 | Multi-Objective Optimization for Urban Drainage or Sewer Networks Rehabilitation through Pipes Substitution and Storage Tanks Installation (2019, Cunha et al.) | - Investment cost <br> - Flood damage cost | - KPI 1 = total pipe replacement cost + storage tank installation cost <br> - KPI 2 = damage at nodes (nonlinear function of flood depth) |
-| 2 | Vulnerability Analysis of Urban Drainage Systems: Tree vs. Loop Networks (2017, Zhang et al.) | - Vulnerability Index (VI) <br> - Overflow flow ratio | - KPI 1 = average overflow ratio when each pipe is blocked (simulating diameter → 0) |
-| 3 | Condition Modeling of Railway Drainage Pipes (2022, Aljafari et al.) | - Structural condition score (STRC) <br> - Service condition score (SRVC) | Multi-class classification (NN, DT, KNN) on CCTV inspection data; scale 1–5 |
-| 4 | Development of a risk-based optimization approach to improve the performance of urban drainage systems (2022, Jafar et al.) | - Expected Annual Damage (EAD) <br> - Annual benefit/cost ratio (EAB/AC) | - EAD = applying MCS over multiple rainfall scenarios <br> - EAB/AC = (baseline damage − post-intervention damage) / annual cost |
-| 5 | Graph method for critical pipe analysis of branched and looped drainage networks (2023, Dastgir et al.) | - $EBC_{e}^{R}$ (Flow edge betweenness centrality) <br> - $EBC_{e}^{C}$ (Capacity edge betweenness centrality) | - $EBC_{e}^{R}$ = total contributing flow area through the pipe (shortest path) <br> - $EBC_{e}^{C}$ = Manning–Strickler capacity |
-| 6 | Exploring the driving factors of urban flood at the catchment scale (2024, Zhang et al.) | - River network density <br> - Building density <br> - Coverage ratio <br> - Building crowding index <br> - Topographic Wetness Index (TWI) | - KPI 1 = river length in catchment / catchment area <br> - KPI 2 = number of buildings / catchment area <br> - KPI 3 = total building footprint area / catchment area <br> - KPI 4 = total building volume / (catchment area × minimum catchment elevation) <br> - KPI 5 = ln(contributing area / tan(terrain slope)) |
-| 7 | Maintenance Strategies for Sewer Pipes with Multi-State Degradation and Deep Reinforcement Learning (2024, Lisandro et al.) | - Health state vector <br> - Policy cost <br> - Reward function | - KPI 1: Normalize number of segments at each severity level k (nd_k) over total segments (nd). <br> - KPI 2: <br>&nbsp;&nbsp;- Maintenance cost (C_M): calculated based on severity level and fixed cost. <br>&nbsp;&nbsp;- Replacement cost: based on pipe length and diameter. <br> - KPI 3: Sum of all costs (maintenance, replacement, failure), normalized. |
-| 8 | Generalization of an intelligent real-time flood prediction model… considering the effect of drainage pipeline siltation (2025, Di et al.) | - Equivalent siltation coefficient (CSC) <br> - Pipe Siltation Index (SI) | - CSC = total sediment volume / total network volume <br> - SI = average (siltation length/pipe length + siltation thickness/pipe diameter) |
-| 9 | Optimization Study of Drainage Network Systems Based on the SWMM for the Wujin District (2025, Pan et al.) | - Nash–Sutcliffe Efficiency (NSE) <br> - Peak flow error <br> - LID cost function | Calibrate SWMM using NSE; optimize LID measure costs |
-| 10 | Building resilient urban drainage systems by integrated flood risk index for evidence-based planning (2025, Shakeel et al.) | Flood Risk Index (FRI) comprising three main components: socioeconomic pressure, drainage system condition, and effectiveness of green infrastructure measures. | - Normalize indices <br> - Assign weights using Analytic Hierarchy Process (AHP) <br> - Calculate component indices <br> - Aggregate FRI |
-
-## 2.2. Analysis by Approach Group
-
-### 2.2.1. Cost and Economic Approach Group
-
-- Cunha et al. (2019) used NSGA-II to simultaneously optimize rehabilitation costs and flood damage, laying the foundation for multi-objective optimization in this field.
-- Jafar et al. (2022) went further by applying Monte Carlo simulation to calculate Expected Annual Damage (EAD) — a probabilistic risk-based approach more suitable for uncertain rainfall conditions.
-- Pan et al. (2025) focused on optimizing the costs of Low Impact Development (LID) measures within the SWMM framework. The common thread of this group is providing a clear economic basis for investment decisions, but all lack integration of sedimentation factors and detailed hydraulic constraints.
-
-### 2.2.2. Sewer Network Condition Approach Group
-
-Aljafari et al. (2022) and Lisandro et al. (2024) focused on degradation modeling and maintenance planning based on the physical condition of pipes. Aljafari et al. used machine learning to classify pipe condition on a 1–5 scale based on CCTV inspection data, while Lisandro et al. applied deep reinforcement learning to optimize maintenance policy under multi-state degradation. Both methods enable forecasting of future maintenance needs, but neither directly links to flow hydraulics and drainage efficiency.
-
-### 2.2.3. Risk and Spatial Analysis Approach Group
-
-- Shakeel et al. (2025) proposed a Flood Risk Index (FRI) integrating three groups of pressure–state–response indicators, weighted using AHP and normalized to a [0–100] scale.
-- Zhang et al. (2024) used Getis-Ord Gi* hotspot analysis and geographically weighted spatial regression to identify urban morphological factors driving flooding at the catchment scale. Zhang et al. (2017) assessed structural vulnerability through simulated hypothetical blockages in individual pipes.
-- Dastgir et al. (2023) developed a graph-theory-based betweenness centrality index to identify the most critical pipes without requiring dynamic simulation.
-
-The strength of this group lies in its ability to spatially locate network weaknesses; the limitation is the lack of economic and sedimentation integration.
-
-### 2.2.4. Sedimentation Research
-
-Di et al. (2025) is the only study in the reviewed set that directly incorporates sedimentation into the quantitative evaluation model. The Equivalent Siltation Coefficient (CSC) and Pipe Siltation Index (SI) were proposed as correction inputs for a real-time flood prediction model. However, this study does not integrate results with system optimization or maintenance cost assessment.
-
-## 2.3. Research Gaps
-
-From the above analysis, three main research gaps are identified:
-
-- Lack of an objective function that considers all three factors — flooding, hydraulics, and sedimentation — within a SWMM-based multi-objective optimization framework. Existing studies either separate economics from hydraulics, or completely disregard sedimentation.
-- Lack of weight balance analysis between factors based on objectives of flood reduction, maintenance cost, and network design.
+where `ρ_m` are computed at pipeline start via **IFAHP + EWM + preference-coefficient combination** (see §3).
 
 ---
 
-# 3. RESEARCH METHODOLOGY
+## 2. Indicator Set (13 total)
 
-## 3.1. General Framework
+Indicators are computed **per subcatchment** and aggregated to the region via either arithmetic or area-weighted mean.
 
-The sewer network optimization problem is formulated as a multi-objective optimization problem:
+### 2.1 FHI — Flood Hazard Index (2 indicators, both dynamic)
 
-$$\min\ F(x)\ =\ [F_1(x),\ F_2(x),\ F_3(x)]$$
+| ID | Indicator | Source | Per-SC Aggregation | Standardization |
+|---|---|---|---|---|
+| H1 | Flood duration | `pyswmm` `node.statistics["flooding_duration"]` | Mean across junctions in SC | `x / T_ref`, clamped to [0,1] |
+| H2 | Flood volume  | `pyswmm` `node.statistics["flooding_volume"]` | **Sum** across junctions in SC | `min(1, x / V_ref_sc)` |
 
-where **$x$** is the decision variable vector (e.g., upgraded pipe diameters, detention tank volumes, pipe dredging schedules). The three component objective functions represent:
+`T_ref` = simulation duration in hours. `V_ref_sc` = `rainfall_depth_mm × area_sc × 10` (m³).
 
-- Flood Severity Index (F₁)
-- Drainage Capacity Index (F₂)
-- Sedimentation–Maintenance Index (F₃)
+**Dropped from the original spec:**
+- *Flood depth*: redundant with flood volume.
+- *Flow velocity (2D)*: requires a 2D surface model unavailable in SWMM 5.
 
-## 3.2. F₁ — Flood Severity Index (FSI)
+### 2.2 FEI — Flood Exposure Index (4 indicators, all static)
 
-F₁ quantifies the severity of flooding at nodes, accounting for both flood volume and flood duration, adjusted by the importance of each node:
+| ID | Indicator | Source | Standardization |
+|---|---|---|---|
+| E1 | Population density | Vietnam Administrative Units (tinhthanhvn.com) | min-max across SCs |
+| E2 | Land-use score | JAXA 2023SEA_v25.09 raster → per-SC zonal mean | pre-scored in [0, 1] via class-to-score table |
+| E3 | Road network density | OpenStreetMap | min-max |
+| E4 | Facilities level | OSM POI weighted by facility importance | min-max |
 
-$$F_1(x) = \sum_{i} w_i \cdot \left[ \alpha \cdot \frac{V_i^{flood}}{V_i^{ref}} + \beta \cdot \frac{T_i^{flood}}{T^{ref}} \right]$$
+### 2.3 FVI — Flood Vulnerability Index (3 indicators, raw values are static but per-SC FVI is **dynamic**)
 
-where:
+| ID | Indicator | Source | Direction |
+|---|---|---|---|
+| V1 | Elderly & children rate | danso.org/viet-nam | Positive (higher rate → higher vulnerability) |
+| V2 | GDP / GRDP | tinhthanhvn.com + thuvienphapluat.vn | Positive (higher GRDP → more economic value at risk) |
+| V3 | Average income | GSO / provincial statistics | Negative (higher income → lower vulnerability) |
 
-- **$N$**: total number of nodes in the network
-- **$w_i$**: importance weight of node i (determined by land use, population density in the corresponding area)
-- **$V_i^{flood}$**: flood volume at node i (m³), extracted from SWMM
-- **$V_i^{ref}$**: reference normalization volume (m³), may be taken as the total rainfall volume reaching node i during the design storm
-- **$T_i^{flood}$**: flood duration at node i (hours), extracted from SWMM
-- **$T^{ref}$**: reference duration (hours), typically taken as the total design storm duration
-- **$α, β$**: weighting coefficients for the importance of flood volume and duration (α + β = 1)
+**Key design decision — dynamic FVI via FHI scaling:** Vulnerability represents damage *when flooding occurs*. An area with vulnerable demographics but no flood contribution has effective vulnerability zero. Therefore the raw FVI per subcatchment is scaled by the subcatchment-level FHI:
 
-*Formula reference: Dastgir et al. (2023), Yazdi et al. (2022), Cunha et al. (2019)*
+$$FVI_s = FHI_s \cdot \sum_{m=1}^{3} \rho_m^{(V)} \cdot V_{m,s}$$
 
-## 3.3. F₂ — Drainage Capacity Index
+This makes FVI change per SWMM evaluation even though V1–V3 are city-wide constants.
 
-F₂ evaluates the operational condition of the pipe system, penalizing pipes that are surcharged or operating beyond safe thresholds:
+### 2.4 FRI — Flood Resilience Index (4 indicators; R1–R3 static, R4 dynamic)
 
-$$F_2(x) = \sum_{j=1}^{M} L_j \cdot \left[ \zeta \cdot \frac{I_j}{I_j^{full}} + \gamma \cdot \frac{T_j^{surch}}{T^{ref}} - \delta \cdot \frac{Q_j}{Q_j^{full}} \right]$$
+All FRI indicators use **positive standardization** within the group (higher `R_m` = more resilience). The outer formula `(1 − FRI)` handles the sign inversion.
 
-where:
+| ID | Indicator | Source | Standardization |
+|---|---|---|---|
+| R1 | Distance to emergency services | OSM POI + grid-based | `(max − raw) / (max − min)` (invert) |
+| R2 | Shelter count (schools + hospitals) | OSM POI | min-max |
+| R3 | Warning coverage | Population-based proxy | raw ratio in [0, 1] |
+| R4 | Drainage capacity | **SWMM, dynamic** — per-subcatchment F2 formula | `1 − min(1, raw / R4_ref)` |
 
-- **$M$**: total number of pipe segments in the network
-- **$L_j$**: length of pipe segment j (m), used as a spatial weight
-- **$T_j^{surch}$**: surcharge duration of pipe j (hours), extracted from SWMM
-- **$I_j / I_j^{full}$**: ratio of actual inflow to full-pipe capacity of pipe j, extracted from SWMM
-- **$Q_j / Q_j^{full}$**: ratio of actual discharge flow to full-pipe capacity of pipe j, extracted from SWMM
-- **$ζ, γ, δ$**: weighting coefficients adjusting the relative importance of each component
+**R4 formula** (mirrors the legacy F2 logic applied per subcatchment):
 
-*Formula reference: Dastgir et al. (2023)*
+$$R4_s^{raw} = \sum_{c \in C_s} L_c \left[\zeta \cdot \frac{Q_c^{peak}}{Q_c^{full}} + \gamma \cdot \frac{T_c^{surch}}{T_{ref}}\right]$$
 
-## 3.4. F₃ — Sedimentation–Maintenance Index
-
-F₃ reflects the long-term operational burden due to sedimentation, encompassing both the physical extent of sedimentation and the corresponding maintenance costs:
-
-$$F_3(x)\ =\ \sum_{j} \left[ \mu \cdot \frac{S_j L_j}{C_j^{cap}} + \nu \cdot \frac{C_j^{maint}}{C_j^{cap}} \right]$$
-
-where:
-
-- **$S_j$**: sedimentation accumulation rate in pipe j (m³/m/year or kg/m/year)
-- **$C_j^{cap}$**: full storage volume of pipe j (m³)
-- **$C_j^{maint}$**: estimated sediment volume requiring dredging/maintenance in pipe j (VND/year)
-- **$μ, ν$**: weighting coefficients
-
-The sedimentation rate **$S_j$** can be estimated via SWMM's water quality module, a simplified sediment transport model (e.g., Engelund–Hansen), or from field survey data of pipe conditions in the study area. The SI index proposed by Di et al. (2025) can be used directly as a proxy for **$S_j$** when survey data is available.
-
-*Formula reference: Di et al. (2025)*
+`R4_ref = max_s R4_s^{raw,baseline}` is the maximum raw accumulator observed on the baseline (no-maintenance) SWMM run. Seeded once via `FROIComputer.set_r4_reference_from_baseline(...)`.
 
 ---
 
-# 4. CONCLUSION
+## 3. Weight Computation — IFAHP + EWM + Combined
 
-This report has proposed a three-component comprehensive objective function **[F₁, F₂, F₃]** for evaluating urban sewer networks within a multi-objective optimization framework combined with SWMM simulation. The main contributions include:
+Weights `ρ_m` per group come from fusing **subjective** (expert-driven) and **objective** (data-driven) signals.
 
-- Synthesis and analysis of related studies, identifying three gaps: lack of sedimentation integration, lack of multi-dimensional standardization, and lack of weight sensitivity analysis in the Vietnamese context.
-- Proposing F₁ to quantify flood severity by volume and duration weighted by node importance; F₂ to evaluate pipe operational condition with self-cleaning velocity constraints; F₃ to quantify sedimentation burden and maintenance costs.
+### 3.1 IFAHP (subjective)
+Reference: `weights.md` §1. Six steps on an intuitionistic fuzzy pairwise matrix per expert:
+1. Expert provides `(μ_ab, ν_ab)` for every pair, with `μ + ν ≤ 1`.
+2. Compute per-expert reliability `λ_k` from matrix averages.
+3. Aggregate expert matrices with weights `λ_k`: `μ_ab = 1 − Π(1 − μ_ab^(k))^{λ_k}`.
+4. Consistency check: `CR = CI / RI ≤ 0.10`. CI is computed by collapsing the fuzzy matrix to a crisp proxy via the score function `S = μ − ν` mapped to the Saaty 1/9..9 scale.
+5. Extract per-indicator triplet `(μ_m, ν_m, π_m)` by row averaging.
+6. Fuzzy-entropy raw weight:
+   $$\hat{\omega}_m = -\frac{1}{M \ln 2} \left[ \mu_m \ln \mu_m + \nu_m \ln \nu_m + (1 − \pi_m) \ln(1 − \pi_m) − \pi_m \ln 2 \right]$$
+   Normalized: `ω_m = ω̂_m / Σ ω̂_i`.
+
+### 3.2 EWM (objective)
+Reference: `weights.md` §2. Five steps on a per-SC data matrix:
+1. Min-max standardize (positive or negative direction per indicator).
+2. Proportions `p_nm = r_nm / Σ_n r_nm`.
+3. Entropy `e_m = −(1 / ln N) Σ p_nm ln p_nm`.
+4. Redundancy `d_m = 1 − e_m`.
+5. Normalize `θ_m = d_m / Σ d_i`.
+
+### 3.3 Combined (preference coefficient)
+$$\varepsilon_m = \frac{\theta_m^2}{\omega_m^2 + \theta_m^2}, \quad
+\rho_m = \frac{\sqrt{(\varepsilon_m \omega_m)^2 + ((1 − \varepsilon_m) \theta_m)^2}}{\sum_i \sqrt{\cdots}}$$
+
+When `ω_m = θ_m`, `ε = 0.5` (balanced mix). When data is very informative (`θ ≫ ω`), `ε → 1` and the combined weight leans toward `ω`; when data is uninformative (`θ ≪ ω`), it leans toward `θ`. This counter-intuitive dual weighting is intentional in the source method — it amplifies whichever signal has *more* uncertainty relative to the other.
+
+**Computed once at init.** Weights do not change per SWMM evaluation.
 
 ---
 
-# REFERENCES
+## 4. Optimization Modes
 
-**[1]** Cunha et al. (2019). Multi-Objective Optimization for Urban Drainage or Sewer Networks Rehabilitation through Pipes Substitution and Storage Tanks Installation.
+`src/boswmm/config.yaml` selects the mode; `KPIEvaluation` and `BOSWMM` honor it.
 
-**[2]** Zhang et al. (2017). Vulnerability Analysis of Urban Drainage Systems: Tree vs. Loop Networks.
+| Mode | Objective vector | BoTorch acquisition |
+|---|---|---|
+| `single` | `[FROI]` (minimize scalar) | `qLogExpectedImprovement` |
+| `multi`  | `[FHI, FEI, FVI, 1 − FRI]` (minimize all 4) | `qLogExpectedHypervolumeImprovement` |
 
-**[3]** Aljafari et al. (2022). Condition Modeling of Railway Drainage Pipes.
+All entries are minimized (lower = better flood outcome). In multi mode, the Pareto front is extracted at the end of the BO loop.
 
-**[4]** Jafar et al. (2022). Development of a risk-based optimization approach to improve the performance of urban drainage systems.
+---
 
-**[5]** Dastgir et al. (2023). Graph method for critical pipe analysis of branched and looped drainage networks.
+## 5. Per-Evaluation Pipeline
 
-**[6]** Zhang et al. (2024). Exploring the driving factors of urban flood at the catchment scale.
+Inside `KPIEvaluation.evaluate(inp_path)`:
 
-**[7]** Lisandro et al. (2024). Maintenance Strategies for Sewer Pipes with Multi-State Degradation and Deep Reinforcement Learning.
+```
+Decision vector x (maintenance volumes, length N)
+        │
+        ▼
+ScenarioBuilder.build_scenario(x) → scenario .inp
+        │
+        ▼
+SWMM Simulation (pyswmm)
+        │
+        ├── node_stats    : {junction: {flooding_volume, flooding_duration, …}}
+        ├── conduit_stats : {conduit: {peak_flow, time_surcharged, …}}
+        └── sim_duration_hours
+        │
+        ▼
+FROIComputer.evaluate(node_stats, conduit_stats, sim_hours)
+    • HazardIndicators  → (S,2) H_norm           [dynamic]
+    • ExposureIndicators → (S,4) E_norm           [cached at init]
+    • VulnerabilityIndicators → (S,3) V_norm     [cached at init]
+    • ResilienceIndicators → (S,4) R_norm         [R4 dynamic, R1-R3 cached]
+        │
+        ▼
+Per-SC indices (ρ_group are pre-computed IFAHP+EWM weights):
+    FHI_s = H_norm @ ρ_H
+    FEI_s = E_norm @ ρ_E
+    FVI_s = FHI_s · (V_norm @ ρ_V)   ← dynamic scaling by per-SC hazard
+    FRI_s = R_norm @ ρ_R
+        │
+        ▼
+Region aggregation (simple or area-weighted mean):
+    FHI, FEI, FVI, FRI
+        │
+        ▼
+FROI = FHI · FEI · FVI · (1 − FRI)
+        │
+        ▼
+Return depending on mode:
+    single → {"kpi": [FROI], …}
+    multi  → {"kpi": [FHI, FEI, FVI, 1 − FRI], …}
+```
 
-**[8]** Di et al. (2025). Generalization of an intelligent real-time flood prediction model… considering the effect of drainage pipeline siltation.
+Of the 13 indicators, **only 3 are recomputed per evaluation** (H1, H2, R4). FHI_s × FVI_raw scaling is a single multiply per subcatchment. Per-evaluation overhead is comparable to the legacy F1+F2+F3 computation — one SWMM run plus light arithmetic.
 
-**[9]** Pan et al. (2025). Optimization Study of Drainage Network Systems Based on the SWMM for the Wujin District.
+---
 
-**[10]** Shakeel et al. (2025). Building resilient urban drainage systems by integrated flood risk index for evidence-based planning.
+## 6. Range Analysis
+
+- `FHI, FEI, FRI ∈ [0, 1]` — weighted sums of [0, 1] indicators with Σ ρ = 1.
+- `FVI_s = FHI_s · FVI_s^{raw}` with both factors in [0, 1], so `FVI_s ∈ [0, 1]`.
+- `FROI ∈ [0, 1]` — product of four [0, 1] scalars.
+
+---
+
+## 7. Dependency on the Decision Variable
+
+The decision variable `x ∈ [0, v_max]^N` (sediment maintenance volumes) only affects SWMM simulation results. Consequences:
+
+- **FHI** changes per evaluation.
+- **FEI** stays constant — demographics/land-use/roads don't depend on x.
+- **FVI** changes per evaluation **through the FHI_s scaling**, even though V1–V3 are static.
+- **FRI** changes per evaluation through R4 only; R1–R3 are static.
+
+**In multi-objective mode,** the GP surrogate for FEI sees zero variance (this is by design). BoTorch prints an `InputDataWarning` about non-standardized data — benign. The effective multi-objective problem is 3-D (FHI, FVI, FRI) scaled by the constant FEI.
+
+**In single-objective mode,** FROI varies through FHI, FVI, and FRI; the constant FEI just scales the magnitude.
+
+---
+
+## Reference Files
+
+| File | Role |
+|---|---|
+| `src/kpi/froi.py` | `FROIComputer` — orchestrates indicators + weights |
+| `src/kpi/indicators/` | 4 indicator groups + `IndicatorGroup` base class |
+| `src/kpi/weights/` | IFAHP, EWM, combined-weight algorithms |
+| `src/kpi/aggregator.py` | Point-in-polygon subcatchment mapping + region aggregation |
+| `src/kpi/config.yaml` | FROI configuration (data paths, references, mode-agnostic params) |
+| `src/boswmm/kpi_evaluation.py` | Thin wrapper: run SWMM + delegate to FROIComputer |
+| `indicators.md` | High-level indicator table (project-level spec) |
+| `weights.md` | IFAHP / EWM / combined-weight derivations |
+| `PLAN_indicators.md` | Detailed per-indicator extraction & calculation spec |

@@ -1,12 +1,12 @@
 # InputqEHVISWMM — Step 1: Scenario Loading & .inp Modification
 
-**Source:** `src/qehvi_swmm/input.py`
+**Source:** `src/boswmm/input.py`
 
 ---
 
 ## Purpose
 
-`InputqEHVISWMM` is the entry point of the qEHVI-SWMM optimization pipeline. It loads a pre-existing EPA SWMM hydraulic model (`.inp` file), configures sedimentation monitoring points, and produces modified `.inp` files for any continuous maintenance-volume decision vector `x`.
+`InputqEHVISWMM` is the entry point of the BO-SWMM optimization pipeline. It loads a pre-existing EPA SWMM hydraulic model (`.inp` file), configures sedimentation monitoring points, and produces modified `.inp` files for any continuous maintenance-volume decision vector `x`.
 
 Internally, `InputqEHVISWMM` is a thin facade over `src.scenario.ScenarioBuilder`, which owns all `.inp` mutation logic. Callers that need richer access to the builder can obtain it via `inp.scenario_builder`.
 
@@ -215,7 +215,7 @@ This avoids redundant rainfall/discharge processing and geometry parsing when ge
 
 ```python
 import torch
-from src.qehvi_swmm import InputqEHVISWMM
+from src.boswmm import InputqEHVISWMM
 
 # Initialize with base model and sedimentation config
 inp = InputqEHVISWMM(
