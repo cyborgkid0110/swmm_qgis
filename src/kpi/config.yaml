@@ -1,0 +1,48 @@
+# Flood Risk (FROI) Configuration
+
+indicators:
+  fhi:
+    # H1 (flood duration) and H2 (flood volume) only.
+    # Reference values for standardization:
+    #   H1: T_ref = simulation duration (computed at runtime)
+    #   H2: V_ref_s = rainfall_depth_mm * area_ha * 10   (m^3)
+    rainfall_depth_mm: 20.0      # assumed total rainfall depth for V_ref
+  fei:
+    # Land use raster path (used only when raster-based E2 is enabled).
+    # For unit testing on Site_Drainage_Model.inp we pass E2 via the CSV
+    # approach — the mock landuse score lives in data/exposure/exposure.csv.
+    land_use_raster: "data/exposure/vietnam_landuse.tif"
+  fvi:
+    # The V1/V2/V3 values in data/vulnerability/vulnerability.csv are
+    # already standardized to [0, 1]. Reference ranges here are for
+    # callers that want to apply normalization upstream.
+    income_ref_range: [30.0, 150.0]
+    grdp_ref_range:   [10.0, 700.0]
+  fri:
+    r4_zeta: 0.5
+    r4_gamma: 0.5
+    # r4_ref is computed at init from a baseline (x=0) SWMM run via
+    # FROIComputer.set_r4_reference_from_baseline().
+
+aggregation:
+  method: "simple"             # "simple" or "area_weighted"
+
+standardization:
+  fhi_method: "reference"      # "reference" (fixed bounds) or "data" (min-max)
+  external_method: "data"      # for FEI/FVI/FRI static indicators
+
+mapping:
+  use_polygons: true           # primary: [POLYGONS] point-in-polygon
+  fallback: "upstream_bfs"     # for junctions outside all polygons
+
+data_paths:
+  exposure:       "data/exposure/exposure.csv"
+  vulnerability:  "data/vulnerability/vulnerability.csv"
+  resilience:     "data/resilience/resilience_static.csv"
+
+weights:
+  expert_matrices:
+    fhi: "data/weights/expert_fhi.json"
+    fei: "data/weights/expert_fei.json"
+    fvi: "data/weights/expert_fvi.json"
+    fri: "data/weights/expert_fri.json"
