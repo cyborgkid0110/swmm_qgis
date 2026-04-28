@@ -93,8 +93,12 @@ Weights `ρ_m` per group come from fusing **subjective** (expert-driven) and **o
 Reference: `weights.md` §1. Six steps on an intuitionistic fuzzy pairwise matrix per expert:
 1. Expert provides `(μ_ab, ν_ab)` for every pair, with `μ + ν ≤ 1`.
 2. Compute per-expert reliability `λ_k` from matrix averages.
-3. Aggregate expert matrices with weights `λ_k`: `μ_ab = 1 − Π(1 − μ_ab^(k))^{λ_k}`.
-4. Consistency check: `CR = CI / RI ≤ 0.10`. CI is computed by collapsing the fuzzy matrix to a crisp proxy via the score function `S = μ − ν` mapped to the Saaty 1/9..9 scale.
+3. **IFWAA aggregation** with weights `λ_k`:
+   - `μ_ab = 1 − Π(1 − μ_ab^(k))^{λ_k}`  (optimistic accumulation for membership)
+   - `ν_ab = Π (ν_ab^(k))^{λ_k}`           (geometric product for non-membership)
+
+   The asymmetry is deliberate. Applying the optimistic operator to both `μ` and `ν` (a common mistake) inflates both sides and breaks the IF constraint: in adversarial inputs the resulting cell can have `μ + ν > 1`. The geometric product on `ν` keeps `μ_ab + ν_ab ≤ 1` cell-by-cell.
+4. **Consistency check.** `CR = (RI(M) − (Σ_a Σ_b π_ab) / M) / (M − 1)`, where `RI(M)` is Saaty's random consistency index. `CR ≤ 0.10` means the matrix is reasonably consistent. **If `CR > 0.10`, the implementation falls back to uniform weights (Σ ω = 1/M each)** and emits a `UserWarning` — inconsistent expert judgments must be re-elicited rather than silently used.
 5. Extract per-indicator triplet `(μ_m, ν_m, π_m)` by row averaging.
 6. Fuzzy-entropy raw weight:
    $$\hat{\omega}_m = -\frac{1}{M \ln 2} \left[ \mu_m \ln \mu_m + \nu_m \ln \nu_m + (1 − \pi_m) \ln(1 − \pi_m) − \pi_m \ln 2 \right]$$

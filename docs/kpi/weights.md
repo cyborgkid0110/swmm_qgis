@@ -20,10 +20,11 @@ Six-step procedure on `K` expert matrices, each of shape `(M, M, 2)` where the l
 from src.kpi.weights import ifahp_weights
 
 result = ifahp_weights([expert_matrix_1, expert_matrix_2], consistency_threshold=0.10)
-# result.weights       — (M,), Σ = 1
-# result.expert_weights — λ_k for each expert
+# result.weights         — (M,), Σ = 1
+# result.expert_weights  — λ_k for each expert
 # result.group_matrix_mu / .group_matrix_nu — aggregated (μ, ν) matrices
 # result.cr, .consistent — Consistency Ratio + boolean
+# result.fallback_used   — True if .weights is the uniform fallback
 # result.indicator_triplets — [(μ_m, ν_m, π_m), …]
 ```
 
@@ -31,18 +32,36 @@ result = ifahp_weights([expert_matrix_1, expert_matrix_2], consistency_threshold
 
 1. **Validate** each expert matrix: `μ + ν ≤ 1`, values in `[0, 1]`.
 2. **Expert weights** `λ_k` from per-matrix average membership / non-membership / hesitation.
-3. **Aggregate** to the group matrix: `μ_ab = 1 − Π(1 − μ_ab^{(k)})^{λ_k}`.
-4. **Consistency Ratio.** The intuitionistic matrix is collapsed to a crisp proxy by the score function `S = μ − ν` mapped via `exp(S · ln 9)` into the Saaty `[1/9, 9]` range. Classical `CI = (λ_max − M) / (M − 1)` and `CR = CI / RI(M)`. Saaty's random-index table is used for `M = 3..15`; `M ≤ 2` returns `CR = 0` (always consistent).
+3. **IFWAA aggregation** to the group matrix:
+   - `μ_ab = 1 − Π(1 − μ_ab^{(k)})^{λ_k}`   (optimistic accumulation for membership)
+   - `ν_ab = Π (ν_ab^{(k)})^{λ_k}`            (geometric product for non-membership)
+
+   The geometric form on `ν` is what guarantees `μ_ab + ν_ab ≤ 1` cell-by-cell. Using the optimistic operator on both sides — a common mistake from secondary algorithm sources — inflates both `μ` and `ν` and can produce invalid IF pairs (e.g., `(0.7, 0.7)` from two adversarial experts).
+4. **Consistency Ratio.** `CR = (RI(M) − mean_hesitation) / (M − 1)`, where `mean_hesitation = (Σ_a Σ_b π_ab) / M` and `π_ab = 1 − μ_ab − ν_ab` is the cell-wise hesitation in the group matrix. `RI(M)` is Saaty's random consistency index (table for `M = 3..15`; `M ≤ 2` returns `CR = 0` and is always consistent).
+
+   Note that with this formula a *highly confident* expert matrix (low `mean_hesitation`) produces a *larger* `CR`, which can be counter-intuitive. The semantics from the source paper: `CR ≤ 0.10` means the average hesitation is high enough relative to the random benchmark `RI(M)` that the matrix is acceptable. Pure-disagreement matrices (everyone hedging at `(0.5, 0.5)`) tend to pass; very decisive matrices tend to fail and trip the fallback.
 5. **Per-indicator triplets** by row-averaging the group matrix.
 6. **Fuzzy entropy** raw weight:
    $$\hat{\omega}_m = -\frac{1}{M \ln 2}\left[\mu_m \ln \mu_m + \nu_m \ln \nu_m + (1 − \pi_m) \ln(1 − \pi_m) − \pi_m \ln 2\right]$$
    Normalized to `Σ ω_m = 1`.
 
+### Consistency-failure fallback
+
+If `CR > consistency_threshold` (default 0.10), the function:
+
+- emits a `UserWarning` with the offending `CR` and the indicator count;
+- returns `weights = uniform = 1/M` (each indicator gets equal weight);
+- sets `result.fallback_used = True`;
+- still populates `group_matrix_mu`, `group_matrix_nu`, and `indicator_triplets` for diagnostics.
+
+This protects downstream optimization from silently consuming weights derived from contradictory expert judgments. Re-elicit the experts and reduce hesitation (push `(μ, ν)` cells away from `(0.5, 0.5)` in the direction the expert actually believes) to clear the check.
+
 ### Edge cases
 
 - Empty expert list → `ValueError`.
-- All-zero expert matrix → uniform `λ` fallback.
-- Every raw weight is zero (indicators carry no information) → uniform `ω` fallback.
+- All-zero expert matrix → uniform `λ` fallback (Step 2).
+- Every raw weight is zero (indicators carry no information) → uniform `ω` fallback with `fallback_used = True` (Step 6).
+- Inconsistent group matrix (`CR > threshold`) → uniform `ω` fallback with `fallback_used = True` and `UserWarning` (Step 4).
 
 ---
 
