@@ -5,17 +5,17 @@ system (IFAHP + EWM + combined) into a single per-evaluation entry point.
 
 Pipeline per SWMM evaluation:
 
-  1. HazardIndicators      → (S, 2) H_norm, dynamic
-  2. ExposureIndicators    → (S, 4) E_norm, cached
-  3. VulnerabilityIndicators → (S, 3) V_norm, cached
-  4. ResilienceIndicators  → (S, 4) R_norm (R4 dynamic, R1–R3 cached)
+  1. HazardIndicators        -> (S, 2) H_norm, dynamic
+  2. ExposureIndicators      -> (S, 4) E_norm, cached
+  3. VulnerabilityIndicators -> (S, 3) V_norm, cached
+  4. ResilienceIndicators    -> (S, 3) R_norm, cached (R1-R3 all static)
   5. Per-SC indices:
-       FHI_s = H_norm @ ρ_H
-       FEI_s = E_norm @ ρ_E
-       FVI_s = FHI_s * (V_norm @ ρ_V)    ← dynamic scaling
-       FRI_s = R_norm @ ρ_R
+       FHI_s = H_norm @ rho_H
+       FEI_s = E_norm @ rho_E
+       FVI_s = FHI_s * (V_norm @ rho_V)    <- dynamic scaling
+       FRI_s = R_norm @ rho_R
   6. Region aggregation (simple or area-weighted).
-  7. FROI = FHI × FEI × FVI × (1 − FRI).
+  7. FROI = FHI * FEI * FVI * (1 - FRI).
 
 Weights are computed once at init via IFAHP (subjective) + EWM (objective) +
 preference-coefficient combination.
@@ -60,7 +60,6 @@ class FROIResult:
     fri: float
     froi: float
 
-    # Per-subcatchment breakdown (useful for reporting and diagnostics)
     fhi_per_sc: np.ndarray
     fei_per_sc: np.ndarray
     fvi_per_sc: np.ndarray
@@ -69,8 +68,8 @@ class FROIResult:
     def as_objective_vector(self, mode: str) -> list[float]:
         """Return the kpi vector BOSWMM will minimize.
 
-        ``mode='single'`` → ``[FROI]``
-        ``mode='multi'``  → ``[FHI, FEI, FVI, 1 − FRI]``
+        ``mode='single'`` -> ``[FROI]``
+        ``mode='multi'``  -> ``[FHI, FEI, FVI, 1 - FRI]``
         """
         if mode == "single":
             return [self.froi]
@@ -92,8 +91,6 @@ class FROIComputer:
         expert_matrices: dict[str, list[np.ndarray]],
         rainfall_depth_mm: float = 50.0,
         sim_duration_hours: float = 1.0,
-        r4_zeta: float = 0.5,
-        r4_gamma: float = 0.5,
         aggregation_method: str = "simple",
     ):
         """
@@ -103,15 +100,13 @@ class FROIComputer:
                 synthetic or real external data CSVs.
             expert_matrices: ``{'fhi': [matrix_1, ...], 'fei': [...], ...}``
                 Each matrix is an ``(M_group, M_group, 2)`` array with
-                (μ, ν) intuitionistic fuzzy numbers. At least one matrix
+                (mu, nu) intuitionistic fuzzy numbers. At least one matrix
                 per group.
             rainfall_depth_mm: Passed to :class:`HazardIndicators` for
                 H2 V_ref computation.
-            sim_duration_hours: Simulation duration; used as T_ref for
-                H1 and the R4 surcharge-time fraction denominator.
-            r4_zeta, r4_gamma: Weights in the R4 raw accumulator.
-            aggregation_method: ``'simple'`` or ``'area_weighted'`` —
-                controls per-SC → region collapse.
+            sim_duration_hours: Simulation duration; used as T_ref for H1.
+            aggregation_method: ``'simple'`` or ``'area_weighted'`` --
+                controls per-SC -> region collapse.
         """
         # --- Spatial mapping ---
         self._sc_names = list(self._parse_sc_order(inp_sections))
@@ -137,16 +132,7 @@ class FROIComputer:
         )
         self._fei = ExposureIndicators(self._sc_names, exposure_csv)
         self._fvi = VulnerabilityIndicators(self._sc_names, vulnerability_csv)
-        self._fri = ResilienceIndicators(
-            self._sc_names,
-            resilience_csv,
-            self._c2sc,
-            self._conduit_props,
-            self._xsection_props,
-            self._node_elevations,
-            r4_zeta=r4_zeta,
-            r4_gamma=r4_gamma,
-        )
+        self._fri = ResilienceIndicators(self._sc_names, resilience_csv)
 
         # --- Weights ---
         self._weights = self._compute_weights(expert_matrices)
@@ -171,30 +157,15 @@ class FROIComputer:
     def _compute_weights(
         self, expert_matrices: dict[str, list[np.ndarray]]
     ) -> dict[str, np.ndarray]:
-        """IFAHP × EWM × combined per group. Returns ``{group: weight_vector}``."""
+        """IFAHP x EWM x combined per group. Returns ``{group: weight_vector}``."""
         out: dict[str, np.ndarray] = {}
 
-        # For EWM we need a sample matrix per group. We use the *already-
-        # standardized* indicator matrices computed from initial data — this
-        # is static at init time for FEI/FVI and uses a zero-flooding baseline
-        # assumption for FHI/FRI (they'll be refined after the first real run
-        # in real use, but for weight-computation purposes the structure of
-        # the data distribution is what matters).
         data_for_ewm = {
-            "fhi": np.zeros((len(self._sc_names), 2)),  # filled below from a seed
+            "fhi": np.zeros((len(self._sc_names), 2)),
             "fei": self._fei.compute(),
             "fvi": self._fvi.compute(),
-            "fri": self._fri._static_normalized,  # R1–R3 only at init
+            "fri": self._fri.compute(),
         }
-        # For FHI and the R4 column, we don't have data yet — use each group's
-        # full indicator space but with zero variance the EWM falls back to
-        # uniform. Callers with a baseline SWMM run in hand can call
-        # ``refit_weights_with_baseline`` after construction.
-        # Pad FRI to 4 columns with a constant 0.5 placeholder for R4.
-        fri_padded = np.column_stack(
-            [data_for_ewm["fri"], np.full(len(self._sc_names), 0.5)]
-        )
-        data_for_ewm["fri"] = fri_padded
 
         for group, matrices in expert_matrices.items():
             ifahp_res = ifahp_weights(matrices)
@@ -210,20 +181,6 @@ class FROIComputer:
         return out
 
     # ------------------------------------------------------------------
-    # Public: baseline-driven calibration (call once before optimization)
-    # ------------------------------------------------------------------
-
-    def set_r4_reference_from_baseline(
-        self,
-        baseline_conduit_stats: dict[str, dict],
-        sim_duration_hours: float,
-    ) -> float:
-        """Seed the R4 reference from a no-maintenance SWMM run."""
-        raw = self._fri.compute_r4_raw(baseline_conduit_stats, sim_duration_hours)
-        self._fri.set_r4_reference(raw)
-        return float(self._fri.r4_reference)
-
-    # ------------------------------------------------------------------
     # Public: per-evaluation scoring
     # ------------------------------------------------------------------
 
@@ -234,20 +191,17 @@ class FROIComputer:
         sim_duration_hours: float,
     ) -> FROIResult:
         """Compute FHI/FEI/FVI/FRI/FROI for one SWMM result set."""
-        # Per-group standardized matrices (S, M_group)
         h_norm, _ = self._fhi.compute(node_stats, sim_duration_hours=sim_duration_hours)
         e_norm = self._fei.compute()
         v_norm = self._fvi.compute()
-        r_norm = self._fri.compute(conduit_stats, sim_duration_hours)
+        r_norm = self._fri.compute()
 
-        # Per-SC indices
-        fhi_per_sc = h_norm @ self._weights["fhi"]            # (S,)
-        fei_per_sc = e_norm @ self._weights["fei"]            # (S,)
-        fvi_raw_per_sc = v_norm @ self._weights["fvi"]        # (S,)
-        fvi_per_sc = fhi_per_sc * fvi_raw_per_sc              # dynamic scaling
-        fri_per_sc = r_norm @ self._weights["fri"]            # (S,)
+        fhi_per_sc = h_norm @ self._weights["fhi"]
+        fei_per_sc = e_norm @ self._weights["fei"]
+        fvi_raw_per_sc = v_norm @ self._weights["fvi"]
+        fvi_per_sc = fhi_per_sc * fvi_raw_per_sc
+        fri_per_sc = r_norm @ self._weights["fri"]
 
-        # Region aggregation (drops UNASSIGNED, honors area_weighted)
         fhi = self._aggregate(fhi_per_sc)
         fei = self._aggregate(fei_per_sc)
         fvi = self._aggregate(fvi_per_sc)
@@ -270,7 +224,6 @@ class FROIComputer:
     def _aggregate(self, per_sc_vec: np.ndarray) -> float:
         """Collapse a (S,) per-SC vector to a region scalar."""
         mapping = {sc: float(per_sc_vec[i]) for i, sc in enumerate(self._sc_names)}
-        # Include UNASSIGNED as a separate key? No — the aggregator drops it.
         return aggregate_to_region(
             mapping, areas=self._areas, method=self._aggregation_method
         )
@@ -289,7 +242,7 @@ class FROIComputer:
 
 
 # ----------------------------------------------------------------------
-# Expert matrix I/O — load JSON stubs into numpy arrays
+# Expert matrix I/O -- load JSON stubs into numpy arrays
 # ----------------------------------------------------------------------
 
 def load_expert_matrices(paths: dict[str, str]) -> dict[str, list[np.ndarray]]:

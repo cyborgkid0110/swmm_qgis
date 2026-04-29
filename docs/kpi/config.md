@@ -1,4 +1,4 @@
-# `src/kpi/config.yaml` — FROI Configuration
+# `src/kpi/config.yaml` -- FROI Configuration
 
 The canonical configuration for the FROI objective function. Loaded by `src.kpi._config.load_default_config()`; a user-supplied dict of the same shape can override at runtime via `resolve_config(user_config)`.
 
@@ -13,21 +13,15 @@ indicators:
 
   fei:
     land_use_raster: "data/exposure/vietnam_landuse.tif"   # used if raster-based E2 is enabled
-    # Tests on Site_Drainage_Model.inp use the pre-computed land_use_score
-    # column in data/exposure/exposure.csv (mock values in local feet CRS).
 
   fvi:
-    # Reference ranges for potential upstream normalization. Indicator CSVs
-    # currently ship values already standardized to [0, 1], so these are
-    # informational.
-    income_ref_range: [30.0, 150.0]    # million VND / person / year
-    grdp_ref_range: [10.0, 700.0]      # trillion VND
+    # tanh normalization scales for V2 and V3.
+    # V2: GRDP in trillion VND; V3: income in million VND/person/year.
+    v2_scale: 500.0
+    v3_scale: 100.0
 
   fri:
-    r4_zeta: 0.5      # Weight on Q_peak/Q_full term in R4 raw
-    r4_gamma: 0.5     # Weight on T_surch/T_ref term in R4 raw
-    # R4 reference is computed at init from a baseline (x=0) SWMM run
-    # via FROIComputer.set_r4_reference_from_baseline(...)
+    # R1-R3 static resilience indicators only. No config params needed.
 
 aggregation:
   method: "simple"        # "simple" or "area_weighted"
@@ -58,14 +52,13 @@ weights:
 | Config key | Constructor arg |
 |---|---|
 | `indicators.fhi.rainfall_depth_mm` | `rainfall_depth_mm` |
-| `indicators.fri.r4_zeta`, `r4_gamma` | `r4_zeta`, `r4_gamma` |
 | `aggregation.method` | `aggregation_method` |
 | `data_paths.exposure` | `exposure_csv` |
 | `data_paths.vulnerability` | `vulnerability_csv` |
 | `data_paths.resilience` | `resilience_csv` |
-| `weights.expert_matrices` | `load_expert_matrices(...)` → `expert_matrices` |
+| `weights.expert_matrices` | `load_expert_matrices(...)` -> `expert_matrices` |
 
-Other keys (`standardization.*`, `mapping.*`, `indicators.fei.*`, `indicators.fvi.*`) are reserved for future expansion and not currently read by the constructor — they document intended behavior for manual tuning.
+Other keys (`standardization.*`, `mapping.*`, `indicators.fei.*`) are reserved for future expansion. The `indicators.fvi.v2_scale` and `v3_scale` values are consumed by `VulnerabilityIndicators` when constructing it manually; the default `FROIComputer` constructor uses the defaults.
 
 ## Loader
 
@@ -73,11 +66,7 @@ Other keys (`standardization.*`, `mapping.*`, `indicators.fei.*`, `indicators.fv
 from src.kpi._config import load_default_config, resolve_config
 
 cfg = load_default_config()
-# Override inline:
-custom = resolve_config({
-    "indicators": {"fri": {"r4_zeta": 0.7, "r4_gamma": 0.3}},
-    ...  # same top-level shape
-})
+custom = resolve_config(user_dict_or_none)
 ```
 
-`resolve_config(None)` returns the default; `resolve_config(dict)` returns the dict as-is (no deep merge — the caller must provide a fully-populated structure).
+`resolve_config(None)` returns the default; `resolve_config(dict)` returns the dict as-is (no deep merge -- the caller must provide a fully-populated structure).

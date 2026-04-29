@@ -57,8 +57,8 @@ Indicators are computed **per subcatchment** and aggregated to the region via ei
 | ID | Indicator | Source | Direction |
 |---|---|---|---|
 | V1 | Elderly & children rate | danso.org/viet-nam | Positive (higher rate → higher vulnerability) |
-| V2 | GDP / GRDP | tinhthanhvn.com + thuvienphapluat.vn | Positive (higher GRDP → more economic value at risk) |
-| V3 | Average income | GSO / provincial statistics | Negative (higher income → lower vulnerability) |
+| V2 | GDP / GRDP | tinhthanhvn.com + thuvienphapluat.vn | Positive; `tanh(grdp_trillion_vnd / 500)` |
+| V3 | Average income | GSO / provincial statistics | Negative; `1 - tanh(income_million_vnd / 100)` |
 
 **Key design decision — dynamic FVI via FHI scaling:** Vulnerability represents damage *when flooding occurs*. An area with vulnerable demographics but no flood contribution has effective vulnerability zero. Therefore the raw FVI per subcatchment is scaled by the subcatchment-level FHI:
 
@@ -66,22 +66,17 @@ $$FVI_s = FHI_s \cdot \sum_{m=1}^{3} \rho_m^{(V)} \cdot V_{m,s}$$
 
 This makes FVI change per SWMM evaluation even though V1–V3 are city-wide constants.
 
-### 2.4 FRI — Flood Resilience Index (4 indicators; R1–R3 static, R4 dynamic)
+### 2.4 FRI -- Flood Resilience Index (3 indicators; all static)
 
-All FRI indicators use **positive standardization** within the group (higher `R_m` = more resilience). The outer formula `(1 − FRI)` handles the sign inversion.
+All FRI indicators use **positive standardization** within the group (higher `R_m` = more resilience). The outer formula `(1 - FRI)` handles the sign inversion.
 
 | ID | Indicator | Source | Standardization |
 |---|---|---|---|
-| R1 | Distance to emergency services | OSM POI + grid-based | `(max − raw) / (max − min)` (invert) |
+| R1 | Distance to emergency services | OSM POI + grid-based | `(max - raw) / (max - min)` (invert) |
 | R2 | Shelter count (schools + hospitals) | OSM POI | min-max |
 | R3 | Warning coverage | Population-based proxy | raw ratio in [0, 1] |
-| R4 | Drainage capacity | **SWMM, dynamic** — per-subcatchment F2 formula | `1 − min(1, raw / R4_ref)` |
 
-**R4 formula** (mirrors the legacy F2 logic applied per subcatchment):
-
-$$R4_s^{raw} = \sum_{c \in C_s} L_c \left[\zeta \cdot \frac{Q_c^{peak}}{Q_c^{full}} + \gamma \cdot \frac{T_c^{surch}}{T_{ref}}\right]$$
-
-`R4_ref = max_s R4_s^{raw,baseline}` is the maximum raw accumulator observed on the baseline (no-maintenance) SWMM run. Seeded once via `FROIComputer.set_r4_reference_from_baseline(...)`.
+R4 (drainage capacity) was removed because it caused double-counting between the SWMM decision variables (sediment maintenance points) and the SWMM output (conduit surcharge statistics). In the HEVR framework used with a hydraulic model, the Resilience group should only contain elements beyond the model's computational scope.
 
 ---
 
@@ -157,7 +152,7 @@ FROIComputer.evaluate(node_stats, conduit_stats, sim_hours)
     • HazardIndicators  → (S,2) H_norm           [dynamic]
     • ExposureIndicators → (S,4) E_norm           [cached at init]
     • VulnerabilityIndicators → (S,3) V_norm     [cached at init]
-    • ResilienceIndicators → (S,4) R_norm         [R4 dynamic, R1-R3 cached]
+    • ResilienceIndicators → (S,3) R_norm           [cached at init]
         │
         ▼
 Per-SC indices (ρ_group are pre-computed IFAHP+EWM weights):
@@ -179,7 +174,7 @@ Return depending on mode:
     multi  → {"kpi": [FHI, FEI, FVI, 1 − FRI], …}
 ```
 
-Of the 13 indicators, **only 3 are recomputed per evaluation** (H1, H2, R4). FHI_s × FVI_raw scaling is a single multiply per subcatchment. Per-evaluation overhead is comparable to the legacy F1+F2+F3 computation — one SWMM run plus light arithmetic.
+Of the 12 indicators, **only 2 are recomputed per evaluation** (H1, H2). FHI_s x FVI_raw scaling is a single multiply per subcatchment. Per-evaluation overhead is comparable to the legacy F1+F2+F3 computation -- one SWMM run plus light arithmetic.
 
 ---
 
@@ -198,11 +193,11 @@ The decision variable `x ∈ [0, v_max]^N` (sediment maintenance volumes) only a
 - **FHI** changes per evaluation.
 - **FEI** stays constant — demographics/land-use/roads don't depend on x.
 - **FVI** changes per evaluation **through the FHI_s scaling**, even though V1–V3 are static.
-- **FRI** changes per evaluation through R4 only; R1–R3 are static.
+- **FRI** stays constant -- R1-R3 are all static.
 
-**In multi-objective mode,** the GP surrogate for FEI sees zero variance (this is by design). BoTorch prints an `InputDataWarning` about non-standardized data — benign. The effective multi-objective problem is 3-D (FHI, FVI, FRI) scaled by the constant FEI.
+**In multi-objective mode,** the GP surrogates for FEI and FRI see zero variance (by design). BoTorch prints an `InputDataWarning` about non-standardized data -- benign. The effective multi-objective problem is 2-D (FHI, FVI) scaled by constants FEI and (1-FRI).
 
-**In single-objective mode,** FROI varies through FHI, FVI, and FRI; the constant FEI just scales the magnitude.
+**In single-objective mode,** FROI varies through FHI and FVI; the constant FEI and FRI just scale the magnitude.
 
 ---
 

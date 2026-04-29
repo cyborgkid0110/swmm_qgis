@@ -191,16 +191,8 @@ froi = FROIComputer(
     expert_matrices=load_expert_matrices(kpi_cfg["weights"]["expert_matrices"]),
     rainfall_depth_mm=kpi_cfg["indicators"]["fhi"]["rainfall_depth_mm"],
     sim_duration_hours=6.0,
-    r4_zeta=kpi_cfg["indicators"]["fri"]["r4_zeta"],
-    r4_gamma=kpi_cfg["indicators"]["fri"]["r4_gamma"],
     aggregation_method=kpi_cfg["aggregation"]["method"],
 )
-
-# Seed R4 reference from a baseline no-maintenance run
-baseline_node, baseline_cond, baseline_hours = KPIEvaluation._run_swmm(
-    "models/Site_Drainage_Model.inp"
-)
-froi.set_r4_reference_from_baseline(baseline_cond, baseline_hours)
 
 # Step 3: KPI evaluator (thin SWMM wrapper + FROI delegate)
 sedimentation = dict(zip(inp.conduit_names, [0.2, 0.4, 0.3, 0.15, 0.25]))

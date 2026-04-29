@@ -1,9 +1,9 @@
 """Indicator groups for FROI (FHI, FEI, FVI, FRI).
 
 Each group exposes a class that knows how to:
-  * load its static data (for FEI/FVI/FRI static components) at init, and
+  * load its static data (for FEI/FVI/FRI) at init, and
   * produce a per-subcatchment matrix of standardized indicator values
-    on demand (from SWMM results for the dynamic FHI/R4 parts).
+    on demand (from SWMM results for the dynamic FHI part).
 
 The shared base class :class:`IndicatorGroup` provides standardization
 primitives so each group stays focused on its own data sources.

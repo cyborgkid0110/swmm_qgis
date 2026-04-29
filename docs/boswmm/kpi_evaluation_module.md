@@ -77,7 +77,7 @@ Evaluate multiple scenarios sequentially.
 
 ### `_run_swmm(inp_path)` (static)
 
-Runs a SWMM simulation and returns `(node_stats, conduit_stats, duration_hours)`. Exposed as a static helper so callers (e.g., baseline runs for seeding `FROIComputer.set_r4_reference_from_baseline`) can use the same extraction logic without instantiating `KPIEvaluation`.
+Runs a SWMM simulation and returns `(node_stats, conduit_stats, duration_hours)`. Exposed as a static helper so callers can use the same extraction logic without instantiating `KPIEvaluation`.
 
 ---
 
@@ -120,16 +120,8 @@ froi = FROIComputer(
     expert_matrices=load_expert_matrices(kpi_cfg["weights"]["expert_matrices"]),
     rainfall_depth_mm=kpi_cfg["indicators"]["fhi"]["rainfall_depth_mm"],
     sim_duration_hours=6.0,
-    r4_zeta=kpi_cfg["indicators"]["fri"]["r4_zeta"],
-    r4_gamma=kpi_cfg["indicators"]["fri"]["r4_gamma"],
     aggregation_method=kpi_cfg["aggregation"]["method"],
 )
-
-# Seed R4 reference from a baseline run.
-_, baseline_cond, baseline_hours = KPIEvaluation._run_swmm(
-    "models/Site_Drainage_Model.inp"
-)
-froi.set_r4_reference_from_baseline(baseline_cond, baseline_hours)
 
 # Create the evaluator (in multi-objective mode).
 evaluator = KPIEvaluation(

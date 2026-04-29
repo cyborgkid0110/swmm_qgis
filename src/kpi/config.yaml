@@ -10,19 +10,16 @@ indicators:
   fei:
     # Land use raster path (used only when raster-based E2 is enabled).
     # For unit testing on Site_Drainage_Model.inp we pass E2 via the CSV
-    # approach — the mock landuse score lives in data/exposure/exposure.csv.
+    # approach -- the mock landuse score lives in data/exposure/exposure.csv.
     land_use_raster: "data/exposure/vietnam_landuse.tif"
   fvi:
-    # The V1/V2/V3 values in data/vulnerability/vulnerability.csv are
-    # already standardized to [0, 1]. Reference ranges here are for
-    # callers that want to apply normalization upstream.
-    income_ref_range: [30.0, 150.0]
-    grdp_ref_range:   [10.0, 700.0]
+    # V2 and V3 are normalized from raw values via tanh(x / scale).
+    # V2: GRDP in trillion VND; V3: income in million VND/person/year.
+    v2_scale: 500.0              # tanh scale for V2 (GRDP)
+    v3_scale: 100.0              # tanh scale for V3 (income)
   fri:
-    r4_zeta: 0.5
-    r4_gamma: 0.5
-    # r4_ref is computed at init from a baseline (x=0) SWMM run via
-    # FROIComputer.set_r4_reference_from_baseline().
+    # R1-R3 static resilience indicators only. No dynamic R4.
+    # All positive-within-FRI: higher = more resilient.
 
 aggregation:
   method: "simple"             # "simple" or "area_weighted"

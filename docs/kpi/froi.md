@@ -1,4 +1,4 @@
-# `src/kpi/froi.py` — FROIComputer Orchestrator
+# `src/kpi/froi.py` -- FROIComputer Orchestrator
 
 Central entry point that the BO-SWMM pipeline calls on every SWMM evaluation.
 
@@ -18,13 +18,8 @@ froi = FROIComputer(
     }),
     rainfall_depth_mm=20.0,
     sim_duration_hours=6.0,
-    r4_zeta=0.5, r4_gamma=0.5,
     aggregation_method="simple",        # or "area_weighted"
 )
-
-# One-off: seed R4 reference from a baseline SWMM run
-_, baseline_cond, baseline_hours = KPIEvaluation._run_swmm(base_inp_path)
-froi.set_r4_reference_from_baseline(baseline_cond, baseline_hours)
 
 # Per-evaluation call
 result = froi.evaluate(node_stats, conduit_stats, sim_duration_hours)
@@ -47,13 +42,13 @@ result = froi.evaluate(node_stats, conduit_stats, sim_duration_hours)
 HazardIndicators.compute(node_stats, sim_duration_hours)  -> (S, 2) H_norm
 ExposureIndicators.compute()                              -> (S, 4) E_norm (cached)
 VulnerabilityIndicators.compute()                         -> (S, 3) V_norm (cached)
-ResilienceIndicators.compute(conduit_stats, sim_hours)    -> (S, 4) R_norm
+ResilienceIndicators.compute()                            -> (S, 3) R_norm (cached)
 
 Per-SC indices:
-    FHI_s = H_norm @ ρ_H
-    FEI_s = E_norm @ ρ_E
-    FVI_s = FHI_s * (V_norm @ ρ_V)        ← dynamic scaling
-    FRI_s = R_norm @ ρ_R
+    FHI_s = H_norm @ rho_H
+    FEI_s = E_norm @ rho_E
+    FVI_s = FHI_s * (V_norm @ rho_V)        <- dynamic scaling
+    FRI_s = R_norm @ rho_R
 
 Region aggregation (simple or area-weighted):
     FHI = mean_s FHI_s,  FEI = ...,  FVI = ...,  FRI = ...
@@ -83,32 +78,9 @@ class FROIResult:
 Uses the already-computed standardized matrices as EWM inputs:
 
 - FEI: fully available at init (static).
-- FVI: fully available at init (static raw values).
-- FHI: **not available** — no SWMM run has happened yet. Currently padded with zeros, which forces EWM to assign uniform θ. IFAHP still contributes ω, so the combined ρ is IFAHP-dominated.
-- FRI: R1–R3 available; R4 padded with a constant 0.5 placeholder (same reason).
-
-This is a known trade-off — weights are set up-front with limited information about the dynamic columns. If you want R4 to carry more weight in FRI after a real run, you can re-fit:
-
-```python
-# After a handful of real evaluations you could call something like:
-# theta_fri = ewm_weights(observed_R_matrix)
-# rho_fri = combined_weights(ifahp_fri.weights, theta_fri)
-# froi._weights["fri"] = rho_fri
-```
-
-No public API for re-fitting is exposed yet — it's a future enhancement if the baseline-weight problem proves material.
-
----
-
-## Baseline R4 reference
-
-`ResilienceIndicators.R4_ref` must be seeded before the first call to `evaluate` that you want to use for optimization. Use either:
-
-```python
-froi.set_r4_reference_from_baseline(baseline_conduit_stats, baseline_hours)
-```
-
-or run `evaluate` once first — on the first call, the method falls back to the current run's max as an on-the-fly reference. The seeded form is preferred because it keeps R4 comparable across evaluations.
+- FVI: fully available at init (static, tanh-normalized).
+- FRI: fully available at init (R1-R3 all static).
+- FHI: **not available** -- no SWMM run has happened yet. Currently padded with zeros, which forces EWM to assign uniform theta. IFAHP still contributes omega, so the combined rho is IFAHP-dominated.
 
 ---
 
