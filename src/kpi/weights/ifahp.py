@@ -1,27 +1,24 @@
-"""IFAHP — Intuitionistic Fuzzy Analytic Hierarchy Process.
+"""IFAHP -- Intuitionistic Fuzzy Analytic Hierarchy Process.
 
 Implements the 6-step subjective-weight procedure from ``weights.md``:
 
   1. Construct one intuitionistic fuzzy judgment matrix per expert, ``A^(k)``.
-     Each cell is a pair ``(μ_ab, ν_ab)`` with ``μ + ν ≤ 1``.
-  2. Compute expert weights ``λ_k`` from each matrix's average membership /
-     non-membership / hesitation.
+     Each cell is a pair ``(mu_ab, nu_ab)`` with ``mu + nu <= 1``.
+  2. Compute expert weights ``lambda_k`` from each matrix's average membership
+     / non-membership / hesitation.
   3. Aggregate the expert matrices into a single group matrix ``R`` using the
-     IFWAA operator: ``μ_ab = 1 − Π(1 − μ)^λ`` and ``ν_ab = Π ν^λ``. Using
-     the geometric product for ``ν`` is what keeps ``μ_ab + ν_ab ≤ 1`` —
-     applying the optimistic ``1 − Π(1 − x)^λ`` to ``ν`` would amplify both
-     sides and break the IF constraint (see comment.txt analysis).
-  4. Consistency check ``CR = (RI − (Σ π_ab) / M) / (M − 1)``. ``CR ≤ 0.10``
-     means the aggregated matrix is reasonably consistent.
-  5. Extract per-indicator aggregated triplet ``(μ_m, ν_m, π_m)`` by row
+     IFWAA operator: ``mu_ab = 1 - Pi(1 - mu)^lam`` and ``nu_ab = Pi nu^lam``.
+  4. Distance-based consistency check: build a perfectly consistent matrix
+     R_bar via Algorithm I, then compute d(R_bar, R).  Consistent iff
+     d < tau (default 0.10).
+  5. Extract per-indicator aggregated triplet ``(mu_m, nu_m, pi_m)`` by row
      averaging.
   6. Convert to raw weights via the fuzzy-entropy formula and normalize so
-     ``Σ ω_m = 1``.
+     ``sum omega_m = 1``.
 
 If the group matrix is **not** consistent, ``ifahp_weights`` falls back to
 uniform weights with a warning rather than silently returning weights from
-contradictory expert judgments. See ``PLAN.md`` §9 (risk analysis row on
-"IFAHP consistency check fails").
+contradictory expert judgments.
 
 All inputs and outputs are plain Python / numpy for easy testing. No hard
 dependency on the rest of the pipeline.
@@ -35,24 +32,21 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# Saaty's Random Consistency Index (RI) table, for n = 1..15
-# RI[n] for matrix size n. RI[1] = RI[2] = 0 by convention.
-_SAATY_RI = [0.0, 0.0, 0.0, 0.58, 0.90, 1.12, 1.24, 1.32,
-             1.41, 1.45, 1.49, 1.51, 1.48, 1.56, 1.57, 1.59]
+_EPS = 1e-12
 
 
 @dataclass
 class IFAHPResult:
     """Outputs of the IFAHP algorithm."""
 
-    weights: np.ndarray          # shape (M,), Σ = 1
-    expert_weights: np.ndarray   # shape (K,), Σ = 1
-    group_matrix_mu: np.ndarray  # shape (M, M) — aggregated μ
-    group_matrix_nu: np.ndarray  # shape (M, M) — aggregated ν
-    cr: float                    # consistency ratio
-    consistent: bool             # CR ≤ 0.10
-    indicator_triplets: list[tuple[float, float, float]]  # [(μ_m, ν_m, π_m)]
-    fallback_used: bool          # True if uniform weights were returned because consistent=False
+    weights: np.ndarray          # shape (M,), sum = 1
+    expert_weights: np.ndarray   # shape (K,), sum = 1
+    group_matrix_mu: np.ndarray  # shape (M, M) -- aggregated mu
+    group_matrix_nu: np.ndarray  # shape (M, M) -- aggregated nu
+    cr: float                    # d(R_bar, R) distance-based consistency measure
+    consistent: bool             # d < 0.10
+    indicator_triplets: list[tuple[float, float, float]]  # [(mu_m, nu_m, pi_m)]
+    fallback_used: bool          # True if uniform weights returned due to inconsistency
 
 
 def _validate_if_matrix(A: np.ndarray) -> None:
@@ -123,27 +117,77 @@ def _aggregate_group_matrix(
     return mu_ab, nu_ab
 
 
-def _consistency_ratio(mu: np.ndarray, nu: np.ndarray) -> float:
-    """Step 4: CR = (RI(M) − mean_hesitation) / (M − 1).
+def _perfectly_consistent_matrix(
+    mu: np.ndarray, nu: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Algorithm I: build R_bar from the group matrix R.
 
-    ``mean_hesitation`` is ``(Σ_a Σ_b π_ab) / M``, where the sum runs over
-    every cell of the M×M group matrix and ``π_ab = 1 − μ_ab − ν_ab``.
-    A small CR means experts agreed strongly (low hesitation across cells)
-    relative to the random-matrix benchmark RI(M).
+    For k > i + 1 (non-adjacent pairs), mu_bar and nu_bar are derived from
+    the geometric mean of transitive chains through intermediate indicators::
+
+        mu_bar_ik = g / (g + h)
+        where g = (prod_{t=i+1}^{k-1} mu_it * mu_tk)^{1/(k-i-1)}
+              h = (prod_{t=i+1}^{k-1} (1-mu_it)*(1-mu_tk))^{1/(k-i-1)}
+
+    Same formula applies independently to nu.
+    For k = i + 1, R_bar_ik = R_ik (adjacent entries are kept).
+    For k < i (lower triangle), swap: mu_bar_ik = nu_bar_ki, nu_bar_ik = mu_bar_ki.
+    For k = i (diagonal), keep the original.
+    """
+    M = mu.shape[0]
+    mu_bar = mu.copy()
+    nu_bar = nu.copy()
+
+    for i in range(M):
+        for k in range(i + 2, M):
+            n_steps = k - i - 1
+            mu_num_prod = 1.0
+            mu_den_prod = 1.0
+            nu_num_prod = 1.0
+            nu_den_prod = 1.0
+            for t in range(i + 1, k):
+                mu_num_prod *= max(mu[i, t] * mu[t, k], _EPS)
+                mu_den_prod *= max((1.0 - mu[i, t]) * (1.0 - mu[t, k]), _EPS)
+                nu_num_prod *= max(nu[i, t] * nu[t, k], _EPS)
+                nu_den_prod *= max((1.0 - nu[i, t]) * (1.0 - nu[t, k]), _EPS)
+
+            mu_g = mu_num_prod ** (1.0 / n_steps)
+            mu_h = mu_den_prod ** (1.0 / n_steps)
+            nu_g = nu_num_prod ** (1.0 / n_steps)
+            nu_h = nu_den_prod ** (1.0 / n_steps)
+
+            mu_bar[i, k] = mu_g / (mu_g + mu_h) if (mu_g + mu_h) > _EPS else 0.5
+            nu_bar[i, k] = nu_g / (nu_g + nu_h) if (nu_g + nu_h) > _EPS else 0.5
+
+    for i in range(M):
+        for k in range(i):
+            mu_bar[i, k] = nu_bar[k, i]
+            nu_bar[i, k] = mu_bar[k, i]
+
+    return mu_bar, nu_bar
+
+
+def _consistency_distance(mu: np.ndarray, nu: np.ndarray) -> float:
+    """Step 4: distance d(R_bar, R) as consistency measure.
+
+    d = 1/(2(n-1)(n-2)) * sum_{i,k} (|mu_bar-mu| + |nu_bar-nu| + |pi_bar-pi|)
+
+    Returns 0.0 for M <= 2 (always consistent).
     """
     M = mu.shape[0]
     if M <= 2:
-        return 0.0  # RI undefined; 2×2 is always consistent.
-
-    pi = 1.0 - mu - nu
-    # Guard against tiny numerical jitter that could push π slightly negative.
-    pi = np.clip(pi, 0.0, 1.0)
-    mean_hesitation = float(pi.sum()) / M
-
-    ri = _SAATY_RI[M] if M < len(_SAATY_RI) else _SAATY_RI[-1]
-    if M - 1 <= 0:
         return 0.0
-    return float((ri - mean_hesitation) / (M - 1))
+
+    mu_bar, nu_bar = _perfectly_consistent_matrix(mu, nu)
+    pi = np.clip(1.0 - mu - nu, 0.0, 1.0)
+    pi_bar = np.clip(1.0 - mu_bar - nu_bar, 0.0, 1.0)
+
+    total = float(
+        np.abs(mu_bar - mu).sum()
+        + np.abs(nu_bar - nu).sum()
+        + np.abs(pi_bar - pi).sum()
+    )
+    return total / (2.0 * (M - 1) * (M - 2))
 
 
 def _row_triplets(
@@ -187,17 +231,15 @@ def ifahp_weights(
 
     Args:
         expert_matrices: List of K arrays, each shape ``(M, M, 2)``. The last
-            axis holds ``(μ, ν)`` with ``μ + ν ≤ 1``.
-        consistency_threshold: Upper bound on CR for the group matrix to be
-            considered consistent (default 0.10 per Saaty). When ``CR`` is
-            above this threshold, the function falls back to uniform weights
-            and emits a ``UserWarning``; the inconsistent fuzzy-entropy
-            weights are still returned in the diagnostic fields
-            (``group_matrix_*``, ``indicator_triplets``) but **not** in
-            ``weights``.
+            axis holds ``(mu, nu)`` with ``mu + nu <= 1``.
+        consistency_threshold: Upper bound on d(R_bar, R) for the group matrix
+            to be considered consistent (default 0.10). When d >= threshold,
+            the function falls back to uniform weights and emits a
+            ``UserWarning``.
 
     Returns:
         :class:`IFAHPResult` with normalized weights and intermediate data.
+        ``cr`` holds d(R_bar, R) (the distance-based consistency measure).
         ``fallback_used = True`` indicates ``weights`` is the uniform vector
         because the consistency check failed.
 
@@ -216,8 +258,8 @@ def ifahp_weights(
 
     lambdas = _expert_weights(arrays)
     mu_group, nu_group = _aggregate_group_matrix(arrays, lambdas)
-    cr = _consistency_ratio(mu_group, nu_group)
-    consistent = cr <= consistency_threshold
+    cr = _consistency_distance(mu_group, nu_group)
+    consistent = cr < consistency_threshold
 
     triplets = _row_triplets(mu_group, nu_group)
     raw = np.array(
@@ -227,10 +269,10 @@ def ifahp_weights(
     fallback_used = False
     if not consistent:
         warnings.warn(
-            f"IFAHP consistency check failed (CR={cr:.4f} > "
+            f"IFAHP consistency check failed (d={cr:.4f} >= "
             f"{consistency_threshold:.2f}). Falling back to uniform weights "
             f"of {1.0 / M:.4f} for {M} indicators. Re-elicit expert "
-            f"judgments to reduce hesitation across the matrix.",
+            f"judgments to improve transitivity.",
             UserWarning,
             stacklevel=2,
         )

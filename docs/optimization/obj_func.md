@@ -98,7 +98,7 @@ Reference: `weights.md` §1. Six steps on an intuitionistic fuzzy pairwise matri
    - `ν_ab = Π (ν_ab^(k))^{λ_k}`           (geometric product for non-membership)
 
    The asymmetry is deliberate. Applying the optimistic operator to both `μ` and `ν` (a common mistake) inflates both sides and breaks the IF constraint: in adversarial inputs the resulting cell can have `μ + ν > 1`. The geometric product on `ν` keeps `μ_ab + ν_ab ≤ 1` cell-by-cell.
-4. **Consistency check.** `CR = (RI(M) − (Σ_a Σ_b π_ab) / M) / (M − 1)`, where `RI(M)` is Saaty's random consistency index. `CR ≤ 0.10` means the matrix is reasonably consistent. **If `CR > 0.10`, the implementation falls back to uniform weights (Σ ω = 1/M each)** and emits a `UserWarning` — inconsistent expert judgments must be re-elicited rather than silently used.
+4. **Distance-based consistency check.** Build a perfectly consistent matrix `R_bar` via Algorithm I (transitive closure of adjacent preferences), then compute `d(R_bar, R) = 1/(2(M-1)(M-2)) * sum(|mu_bar-mu| + |nu_bar-nu| + |pi_bar-pi|)`. **If `d >= 0.10`, the implementation falls back to uniform weights (sum omega = 1/M each)** and emits a `UserWarning` -- inconsistent expert judgments must be re-elicited rather than silently used.
 5. Extract per-indicator triplet `(μ_m, ν_m, π_m)` by row averaging.
 6. Fuzzy-entropy raw weight:
    $$\hat{\omega}_m = -\frac{1}{M \ln 2} \left[ \mu_m \ln \mu_m + \nu_m \ln \nu_m + (1 − \pi_m) \ln(1 − \pi_m) − \pi_m \ln 2 \right]$$

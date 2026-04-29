@@ -37,9 +37,19 @@ result = ifahp_weights([expert_matrix_1, expert_matrix_2], consistency_threshold
    - `ν_ab = Π (ν_ab^{(k)})^{λ_k}`            (geometric product for non-membership)
 
    The geometric form on `ν` is what guarantees `μ_ab + ν_ab ≤ 1` cell-by-cell. Using the optimistic operator on both sides — a common mistake from secondary algorithm sources — inflates both `μ` and `ν` and can produce invalid IF pairs (e.g., `(0.7, 0.7)` from two adversarial experts).
-4. **Consistency Ratio.** `CR = (RI(M) − mean_hesitation) / (M − 1)`, where `mean_hesitation = (Σ_a Σ_b π_ab) / M` and `π_ab = 1 − μ_ab − ν_ab` is the cell-wise hesitation in the group matrix. `RI(M)` is Saaty's random consistency index (table for `M = 3..15`; `M ≤ 2` returns `CR = 0` and is always consistent).
+4. **Distance-based consistency check.** Instead of the traditional Saaty CR (which is ill-defined for intuitionistic fuzzy preference relations and can go negative), the implementation uses a distance measure `d(R_bar, R)` between the group matrix `R` and a perfectly consistent matrix `R_bar` constructed via Algorithm I:
 
-   Note that with this formula a *highly confident* expert matrix (low `mean_hesitation`) produces a *larger* `CR`, which can be counter-intuitive. The semantics from the source paper: `CR ≤ 0.10` means the average hesitation is high enough relative to the random benchmark `RI(M)` that the matrix is acceptable. Pure-disagreement matrices (everyone hedging at `(0.5, 0.5)`) tend to pass; very decisive matrices tend to fail and trip the fallback.
+   **Algorithm I** — For non-adjacent pairs `k > i + 1`:
+   ```
+   mu_bar_ik = g / (g + h)
+   where g = (prod_{t=i+1}^{k-1} mu_it * mu_tk)^{1/(k-i-1)}
+         h = (prod_{t=i+1}^{k-1} (1-mu_it)*(1-mu_tk))^{1/(k-i-1)}
+   ```
+   Same formula for `nu_bar`. Adjacent entries (`k = i + 1`) are kept from `R`. Lower triangle swaps: `mu_bar_ik = nu_bar_ki`.
+
+   **Distance:** `d(R_bar, R) = 1/(2(M-1)(M-2)) * sum_{i,k} (|mu_bar-mu| + |nu_bar-nu| + |pi_bar-pi|)`
+
+   Consistent iff `d < 0.10`. For `M <= 2`, `d = 0` (always consistent). The `cr` field in `IFAHPResult` holds this distance value.
 5. **Per-indicator triplets** by row-averaging the group matrix.
 6. **Fuzzy entropy** raw weight:
    $$\hat{\omega}_m = -\frac{1}{M \ln 2}\left[\mu_m \ln \mu_m + \nu_m \ln \nu_m + (1 − \pi_m) \ln(1 − \pi_m) − \pi_m \ln 2\right]$$
@@ -47,21 +57,21 @@ result = ifahp_weights([expert_matrix_1, expert_matrix_2], consistency_threshold
 
 ### Consistency-failure fallback
 
-If `CR > consistency_threshold` (default 0.10), the function:
+If `d >= consistency_threshold` (default 0.10), the function:
 
 - emits a `UserWarning` with the offending `CR` and the indicator count;
 - returns `weights = uniform = 1/M` (each indicator gets equal weight);
 - sets `result.fallback_used = True`;
 - still populates `group_matrix_mu`, `group_matrix_nu`, and `indicator_triplets` for diagnostics.
 
-This protects downstream optimization from silently consuming weights derived from contradictory expert judgments. Re-elicit the experts and reduce hesitation (push `(μ, ν)` cells away from `(0.5, 0.5)` in the direction the expert actually believes) to clear the check.
+This protects downstream optimization from silently consuming weights derived from contradictory expert judgments. Re-elicit the experts and improve transitivity (ensure pairwise preferences are internally consistent across chains of comparisons) to clear the check.
 
 ### Edge cases
 
 - Empty expert list → `ValueError`.
 - All-zero expert matrix → uniform `λ` fallback (Step 2).
 - Every raw weight is zero (indicators carry no information) → uniform `ω` fallback with `fallback_used = True` (Step 6).
-- Inconsistent group matrix (`CR > threshold`) → uniform `ω` fallback with `fallback_used = True` and `UserWarning` (Step 4).
+- Inconsistent group matrix (`d >= threshold`) → uniform `ω` fallback with `fallback_used = True` and `UserWarning` (Step 4).
 
 ---
 
