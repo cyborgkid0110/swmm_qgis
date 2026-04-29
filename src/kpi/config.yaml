@@ -14,9 +14,7 @@ indicators:
     land_use_raster: "data/exposure/vietnam_landuse.tif"
   fvi:
     # V2 and V3 are normalized from raw values via tanh(x / scale).
-    # V2: GRDP in trillion VND; V3: income in million VND/person/year.
-    v2_scale: 500.0              # tanh scale for V2 (GRDP)
-    v3_scale: 100.0              # tanh scale for V3 (income)
+    # Scales are hardcoded in vulnerability.py (_V2_SCALE=500, _V3_SCALE=100).
   fri:
     # R1-R3 static resilience indicators only. No dynamic R4.
     # All positive-within-FRI: higher = more resilient.

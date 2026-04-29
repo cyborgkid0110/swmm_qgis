@@ -15,10 +15,7 @@ indicators:
     land_use_raster: "data/exposure/vietnam_landuse.tif"   # used if raster-based E2 is enabled
 
   fvi:
-    # tanh normalization scales for V2 and V3.
-    # V2: GRDP in trillion VND; V3: income in million VND/person/year.
-    v2_scale: 500.0
-    v3_scale: 100.0
+    # V2/V3 tanh scales are hardcoded in vulnerability.py.
 
   fri:
     # R1-R3 static resilience indicators only. No config params needed.
@@ -58,7 +55,7 @@ weights:
 | `data_paths.resilience` | `resilience_csv` |
 | `weights.expert_matrices` | `load_expert_matrices(...)` -> `expert_matrices` |
 
-Other keys (`standardization.*`, `mapping.*`, `indicators.fei.*`) are reserved for future expansion. The `indicators.fvi.v2_scale` and `v3_scale` values are consumed by `VulnerabilityIndicators` when constructing it manually; the default `FROIComputer` constructor uses the defaults.
+Other keys (`standardization.*`, `mapping.*`, `indicators.fei.*`, `indicators.fvi.*`) are reserved for future expansion and not currently read by the constructor.
 
 ## Loader
 

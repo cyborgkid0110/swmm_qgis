@@ -75,11 +75,10 @@ Ha Noi,0.357,486.0,72.0
 | V2 -- GDP / GRDP | positive | `tanh(grdp_trillion_vnd / v2_scale)` |
 | V3 -- average income | **negative** | `1 - tanh(income_million_vnd / v3_scale)` |
 
-V2 and V3 use `tanh(x / scale)` normalization because their raw values (trillion VND, million VND) have no natural upper bound. The `scale` parameter controls the steepness: values near `scale` map to ~0.76. Defaults: `v2_scale=500.0`, `v3_scale=100.0`.
+V2 and V3 use `tanh(x / scale)` normalization because their raw values (trillion VND, million VND) have no natural upper bound. Scales are hardcoded: V2 scale = 500 (trillion VND), V3 scale = 100 (million VND).
 
 ```python
-VulnerabilityIndicators(subcatchment_names, vulnerability_csv,
-                        v2_scale=500.0, v3_scale=100.0)
+VulnerabilityIndicators(subcatchment_names, vulnerability_csv)
 ```
 
 `compute()` returns `(S, 3)` where all rows are identical (city-wide). The dynamic FVI scaling by FHI_s happens inside `FROIComputer`, not here.
