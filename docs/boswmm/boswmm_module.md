@@ -132,7 +132,7 @@ constraints:
   maintenance_budget: 128.0   # A (m^3)
 
 kpi:
-  config_path: "src/kpi/config.yaml"
+  concurrent_evaluations: 4   # parallel SWMM simulations (1 = sequential)
 ```
 
 | Parameter | Section | Description |
@@ -148,6 +148,7 @@ kpi:
 | `seed` | `optimization` | Sobol reproducibility seed. |
 | `ref_point_offset` | `optimization` | EHVI reference-point margin (negated-space offset). |
 | `maintenance_budget` | `constraints` | Sum-constraint budget `A` (m³). Compare with `Σ v_max` logged at init. |
+| `concurrent_evaluations` | `kpi` | Number of parallel SWMM simulations in `evaluate_batch`. `1` = sequential; values > 1 use `ProcessPoolExecutor`. |
 
 ---
 

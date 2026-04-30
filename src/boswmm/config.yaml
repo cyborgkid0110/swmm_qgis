@@ -19,5 +19,5 @@ optimization:                 # Bayesian optimization settings
 constraints:
   maintenance_budget: 128.0   # A: max total maintenance volume in m^3 (constraint: sum(x_i) <= A)
 
-kpi:                          # Pointer to FROI configuration (used by pipeline wrappers)
-  config_path: "src/kpi/config.yaml"
+kpi:
+  concurrent_evaluations: 4   # number of parallel SWMM simulations in evaluate_batch (1 = sequential)

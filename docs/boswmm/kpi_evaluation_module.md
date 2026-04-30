@@ -38,8 +38,10 @@ KPIEvaluation(
 |---|---|---|
 | `base_inp_path` | Yes | Path to the base `.inp` model file. Used to parse sections for `FROIComputer` and to run a baseline SWMM simulation for `sim_duration_hours`. |
 | `kpi_config` | No (kw) | KPI configuration. A parsed dict, a path to a YAML file, or `None` to load the KPI package default (`src/kpi/config.yaml`). |
-| `bo_config` | No (kw) | BO-SWMM configuration. A parsed dict, a path to a YAML file, or `None` to load the BO-SWMM package default (`src/boswmm/config.yaml`). Used only to resolve `mode` when not provided explicitly. |
+| `bo_config` | No (kw) | BO-SWMM configuration. A parsed dict, a path to a YAML file, or `None` to load the BO-SWMM package default (`src/boswmm/config.yaml`). Used to resolve `mode` and `kpi.concurrent_evaluations`. |
 | `mode` | No (kw) | `'single'` or `'multi'`. If `None`, read from `bo_config["optimization"]["mode"]`. |
+
+The number of parallel SWMM simulations is controlled by `kpi.concurrent_evaluations` in `config.yaml` (default `1` = sequential; values > 1 use `ProcessPoolExecutor`).
 
 Raises `ValueError` if `mode` is not one of `'single'` / `'multi'`.
 
@@ -70,7 +72,7 @@ Raises `FileNotFoundError` if `inp_path` is missing, and `RuntimeError` if the S
 
 ### `evaluate_batch(inp_paths) -> list[dict]`
 
-Evaluate multiple scenarios sequentially.
+Evaluate multiple scenarios. When `max_workers > 1`, SWMM simulations run in parallel via `ProcessPoolExecutor`; the lightweight FROI scoring (numpy) always runs sequentially afterward.
 
 ### Properties
 
@@ -99,6 +101,8 @@ From `pyswmm.Links(sim)` (conduits only):
 - plus `peak_velocity`, `time_normal_flow`, etc.
 
 The `SystemStats.routing_stats` bundle is also inspected to ensure the engine completed normally, but its values are not currently propagated to the KPI.
+
+All statistics values are converted to plain Python `float` (pyswmm returns SWIG proxy objects that are not picklable across process boundaries).
 
 ---
 
