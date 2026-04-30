@@ -29,6 +29,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ._config import resolve_config
 from .aggregator import (
     UNASSIGNED,
     aggregate_to_region,
@@ -85,29 +86,24 @@ class FROIComputer:
         self,
         inp_sections: dict,
         *,
-        exposure_csv: str,
-        vulnerability_csv: str,
-        resilience_csv: str,
-        expert_matrices: dict[str, list[np.ndarray]],
-        rainfall_depth_mm: float = 50.0,
-        sim_duration_hours: float = 1.0,
-        aggregation_method: str = "simple",
+        kpi_config: dict | str | None = None,
     ):
         """
         Args:
             inp_sections: Parsed .inp sections (``parse_inp(path)`` output).
-            exposure_csv / vulnerability_csv / resilience_csv: Paths to the
-                synthetic or real external data CSVs.
-            expert_matrices: ``{'fhi': [matrix_1, ...], 'fei': [...], ...}``
-                Each matrix is an ``(M_group, M_group, 2)`` array with
-                (mu, nu) intuitionistic fuzzy numbers. At least one matrix
-                per group.
-            rainfall_depth_mm: Passed to :class:`HazardIndicators` for
-                H2 V_ref computation.
-            sim_duration_hours: Simulation duration; used as T_ref for H1.
-            aggregation_method: ``'simple'`` or ``'area_weighted'`` --
-                controls per-SC -> region collapse.
+            kpi_config: KPI configuration. Accepts a parsed dict, a path to a
+                YAML file, or ``None`` to load the package default
+                (``src/kpi/config.yaml``).
         """
+        cfg = resolve_config(kpi_config)
+
+        exposure_csv = cfg["data_paths"]["exposure"]
+        vulnerability_csv = cfg["data_paths"]["vulnerability"]
+        resilience_csv = cfg["data_paths"]["resilience"]
+        expert_matrices = load_expert_matrices(cfg["weights"]["expert_matrices"])
+        rainfall_depth_mm = cfg["indicators"]["fhi"]["rainfall_depth_mm"]
+        aggregation_method = cfg["aggregation"]["method"]
+
         # --- Spatial mapping ---
         self._sc_names = list(self._parse_sc_order(inp_sections))
         self._areas = parse_subcatchment_areas(inp_sections)
@@ -128,7 +124,6 @@ class FROIComputer:
             self._j2sc,
             self._areas,
             rainfall_depth_mm=rainfall_depth_mm,
-            sim_duration_hours=sim_duration_hours,
         )
         self._fei = ExposureIndicators(self._sc_names, exposure_csv)
         self._fvi = VulnerabilityIndicators(self._sc_names, vulnerability_csv)
@@ -187,11 +182,9 @@ class FROIComputer:
     def evaluate(
         self,
         node_stats: dict[str, dict],
-        conduit_stats: dict[str, dict],
-        sim_duration_hours: float,
     ) -> FROIResult:
         """Compute FHI/FEI/FVI/FRI/FROI for one SWMM result set."""
-        h_norm, _ = self._fhi.compute(node_stats, sim_duration_hours=sim_duration_hours)
+        h_norm, _ = self._fhi.compute(node_stats)
         e_norm = self._fei.compute()
         v_norm = self._fvi.compute()
         r_norm = self._fri.compute()
@@ -239,6 +232,9 @@ class FROIComputer:
     @property
     def subcatchment_names(self) -> list[str]:
         return list(self._sc_names)
+    
+    def set_simulation_time(self, sim_duration_hours):
+        self._fhi._set_simulation_time(sim_duration_hours)
 
 
 # ----------------------------------------------------------------------

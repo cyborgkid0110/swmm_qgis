@@ -5,7 +5,7 @@ This package implements the objective function of the BO-SWMM pipeline. It is th
 - **Indicators** — 12 per-subcatchment measurements grouped into 4 indices (FHI, FEI, FVI, FRI).
 - **Weights** — IFAHP (subjective) + EWM (objective) + preference-coefficient combination.
 - **Aggregator** — point-in-polygon and upstream-BFS mapping from SWMM junctions/conduits to subcatchments.
-- **FROIComputer** — orchestrator that exposes a single `evaluate(node_stats, conduit_stats, hours)` entry point to the rest of the pipeline.
+- **FROIComputer** — orchestrator that auto-loads KPI config and exposes a single `evaluate(node_stats)` entry point to the rest of the pipeline.
 
 ## Documentation map
 

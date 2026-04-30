@@ -166,44 +166,20 @@ Set `patience: -1` to disable early stopping and always run `max_iter`.
 
 ```python
 from src.boswmm import BOSWMM, InputqEHVISWMM, KPIEvaluation
-from src.boswmm._config import load_default_config
-from src.kpi._config import load_default_config as load_kpi_cfg
-from src.kpi.froi import FROIComputer, load_expert_matrices
-from src.scenario.utils.parser import parse_inp
+
+BASE_INP = "models/Site_Drainage_Model.inp"
 
 # Step 1: scenario input
 inp = InputqEHVISWMM(
-    base_inp_path="models/Site_Drainage_Model.inp",
+    base_inp_path=BASE_INP,
     sedimentation_csv="data/sedimentation.csv",
     output_dir="output/scenarios",
 )
 
-# Step 2: FROI computer (shared across evaluations)
-bo_cfg = load_default_config()
-kpi_cfg = load_kpi_cfg()
-sections = parse_inp("models/Site_Drainage_Model.inp")
+# Step 2: KPI evaluator (loads configs + builds FROIComputer internally)
+evaluator = KPIEvaluation(base_inp_path=BASE_INP)
 
-froi = FROIComputer(
-    sections,
-    exposure_csv=kpi_cfg["data_paths"]["exposure"],
-    vulnerability_csv=kpi_cfg["data_paths"]["vulnerability"],
-    resilience_csv=kpi_cfg["data_paths"]["resilience"],
-    expert_matrices=load_expert_matrices(kpi_cfg["weights"]["expert_matrices"]),
-    rainfall_depth_mm=kpi_cfg["indicators"]["fhi"]["rainfall_depth_mm"],
-    sim_duration_hours=6.0,
-    aggregation_method=kpi_cfg["aggregation"]["method"],
-)
-
-# Step 3: KPI evaluator (thin SWMM wrapper + FROI delegate)
-sedimentation = dict(zip(inp.conduit_names, [0.2, 0.4, 0.3, 0.15, 0.25]))
-evaluator = KPIEvaluation(
-    inp_sections=sections,
-    sedimentation=sedimentation,
-    froi_computer=froi,
-    mode=bo_cfg["optimization"]["mode"],
-)
-
-# Step 4: BO
+# Step 3: BO
 optimizer = BOSWMM(input_module=inp, kpi_evaluator=evaluator)
 result = optimizer.run(output_path="output/report.json")
 

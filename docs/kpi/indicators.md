@@ -27,11 +27,12 @@ HazardIndicators(
     subcatchment_areas: dict[str, float],   # hectares
     *,
     rainfall_depth_mm: float = 50.0,
-    sim_duration_hours: float = 1.0,
 )
 ```
 
-`compute(node_stats, sim_duration_hours=None) -> (normalized, fhi_s_raw)` returns the standardized `(S, 2)` matrix.
+Simulation duration for H1 normalization is set via `_set_simulation_time(hours)`, called by `KPIEvaluation` during baseline calibration.
+
+`compute(node_stats) -> (normalized, fhi_s_raw)` returns the standardized `(S, 2)` matrix.
 
 ---
 

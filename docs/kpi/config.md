@@ -46,14 +46,16 @@ weights:
 
 ## Keys consumed by `FROIComputer`
 
-| Config key | Constructor arg |
+All keys below are extracted internally when `FROIComputer` resolves its `kpi_config`:
+
+| Config key | Internal use |
 |---|---|
-| `indicators.fhi.rainfall_depth_mm` | `rainfall_depth_mm` |
-| `aggregation.method` | `aggregation_method` |
-| `data_paths.exposure` | `exposure_csv` |
-| `data_paths.vulnerability` | `vulnerability_csv` |
-| `data_paths.resilience` | `resilience_csv` |
-| `weights.expert_matrices` | `load_expert_matrices(...)` -> `expert_matrices` |
+| `indicators.fhi.rainfall_depth_mm` | Passed to `HazardIndicators` for H2 V_ref |
+| `aggregation.method` | Region aggregation strategy (`simple` / `area_weighted`) |
+| `data_paths.exposure` | CSV path for `ExposureIndicators` |
+| `data_paths.vulnerability` | CSV path for `VulnerabilityIndicators` |
+| `data_paths.resilience` | CSV path for `ResilienceIndicators` |
+| `weights.expert_matrices` | JSON paths loaded via `load_expert_matrices()` for IFAHP |
 
 Other keys (`standardization.*`, `mapping.*`, `indicators.fei.*`, `indicators.fvi.*`) are reserved for future expansion and not currently read by the constructor.
 
@@ -62,8 +64,12 @@ Other keys (`standardization.*`, `mapping.*`, `indicators.fei.*`, `indicators.fv
 ```python
 from src.kpi._config import load_default_config, resolve_config
 
-cfg = load_default_config()
-custom = resolve_config(user_dict_or_none)
+cfg = load_default_config()                    # always loads src/kpi/config.yaml
+custom = resolve_config(None)                  # same as load_default_config()
+custom = resolve_config("path/to/config.yaml") # load from a custom YAML path
+custom = resolve_config({"indicators": ...})   # use a dict directly
 ```
 
-`resolve_config(None)` returns the default; `resolve_config(dict)` returns the dict as-is (no deep merge -- the caller must provide a fully-populated structure).
+`resolve_config(None)` returns the default; `resolve_config(str)` loads a YAML file; `resolve_config(dict)` returns the dict as-is (no deep merge -- the caller must provide a fully-populated structure).
+
+Note: `FROIComputer` and `KPIEvaluation` both call `resolve_config` internally, so callers typically do not need to invoke it directly.

@@ -7,12 +7,14 @@
 
 ## Purpose
 
-`KPIEvaluation` is a thin wrapper around the SWMM engine. Its responsibilities are narrow:
+`KPIEvaluation` is the single entry point for SWMM-based KPI evaluation. It:
 
-1. Run `pyswmm.Simulation` on a scenario `.inp`.
-2. Collect junction and conduit statistics.
-3. Hand them to a pre-constructed `FROIComputer`.
-4. Package the result as the `kpi` vector BOSWMM minimizes, using the current mode (`single` → `[FROI]`, `multi` → `[FHI, FEI, FVI, 1 − FRI]`).
+1. Parse the base `.inp` and construct a `FROIComputer` internally.
+2. Run a baseline SWMM simulation to calibrate `sim_duration_hours`.
+3. Run `pyswmm.Simulation` on scenario `.inp` files during evaluation.
+4. Collect junction and conduit statistics.
+5. Hand them to the internal `FROIComputer`.
+6. Package the result as the `kpi` vector BOSWMM minimizes, using the current mode (`single` → `[FROI]`, `multi` → `[FHI, FEI, FVI, 1 − FRI]`).
 
 This class is reused in both **Step 2** (initial evaluation) and **Step 3.2** (evaluation inside the BO loop).
 
@@ -24,20 +26,20 @@ All objective-function math — indicators, weights, FHI_s × FVI scaling, FROI 
 
 ```python
 KPIEvaluation(
-    inp_sections: OrderedDict,
-    sedimentation: dict[str, float],
+    base_inp_path: str,
     *,
-    froi_computer: FROIComputer,
-    mode: str = "multi",
+    kpi_config: dict | str | None = None,
+    bo_config: dict | str | None = None,
+    mode: str | None = None,
 )
 ```
 
 | Parameter | Required | Description |
 |---|---|---|
-| `inp_sections` | Yes | Parsed `.inp` sections. Retained for API compatibility; the actual parsing is now done inside `FROIComputer`. |
-| `sedimentation` | Yes | `{conduit_name: filled_depth}`. Unused for KPI computation — it feeds scenario construction elsewhere. Kept in the signature for compatibility with legacy callers. |
-| `froi_computer` | Yes (kw) | Pre-constructed `FROIComputer`. Normally built once at pipeline start and reused. |
-| `mode` | No (kw) | `'single'` or `'multi'`. Controls the shape of `kpi` (length 1 vs length 4). Default `'multi'`. |
+| `base_inp_path` | Yes | Path to the base `.inp` model file. Used to parse sections for `FROIComputer` and to run a baseline SWMM simulation for `sim_duration_hours`. |
+| `kpi_config` | No (kw) | KPI configuration. A parsed dict, a path to a YAML file, or `None` to load the KPI package default (`src/kpi/config.yaml`). |
+| `bo_config` | No (kw) | BO-SWMM configuration. A parsed dict, a path to a YAML file, or `None` to load the BO-SWMM package default (`src/boswmm/config.yaml`). Used only to resolve `mode` when not provided explicitly. |
+| `mode` | No (kw) | `'single'` or `'multi'`. If `None`, read from `bo_config["optimization"]["mode"]`. |
 
 Raises `ValueError` if `mode` is not one of `'single'` / `'multi'`.
 
@@ -74,6 +76,7 @@ Evaluate multiple scenarios sequentially.
 
 - `mode` — `'single'` or `'multi'`.
 - `n_objectives` — `1` (single) or `4` (multi).
+- `froi_computer` — The internal `FROIComputer` instance (for advanced use).
 
 ### `_run_swmm(inp_path)` (static)
 
@@ -102,33 +105,22 @@ The `SystemStats.routing_stats` bundle is also inspected to ensure the engine co
 ## Usage Example
 
 ```python
-from collections import OrderedDict
 from src.boswmm import KPIEvaluation
-from src.kpi._config import load_default_config as load_kpi_cfg
-from src.kpi.froi import FROIComputer, load_expert_matrices
-from src.scenario.utils.parser import parse_inp
 
-kpi_cfg = load_kpi_cfg()
-sections = parse_inp("models/Site_Drainage_Model.inp")
+# All defaults — loads KPI and BO configs, builds FROIComputer, runs baseline SWMM:
+evaluator = KPIEvaluation(base_inp_path="models/Site_Drainage_Model.inp")
 
-# Build the FROI computer once.
-froi = FROIComputer(
-    sections,
-    exposure_csv=kpi_cfg["data_paths"]["exposure"],
-    vulnerability_csv=kpi_cfg["data_paths"]["vulnerability"],
-    resilience_csv=kpi_cfg["data_paths"]["resilience"],
-    expert_matrices=load_expert_matrices(kpi_cfg["weights"]["expert_matrices"]),
-    rainfall_depth_mm=kpi_cfg["indicators"]["fhi"]["rainfall_depth_mm"],
-    sim_duration_hours=6.0,
-    aggregation_method=kpi_cfg["aggregation"]["method"],
+# With custom configs:
+evaluator = KPIEvaluation(
+    base_inp_path="models/Site_Drainage_Model.inp",
+    kpi_config="custom/kpi_config.yaml",
+    bo_config="custom/bo_config.yaml",
 )
 
-# Create the evaluator (in multi-objective mode).
+# Or override mode explicitly:
 evaluator = KPIEvaluation(
-    inp_sections=sections,
-    sedimentation={"C1": 0.2, "C3": 0.4, "C5": 0.3, "C7": 0.15, "C9": 0.25},
-    froi_computer=froi,
-    mode="multi",
+    base_inp_path="models/Site_Drainage_Model.inp",
+    mode="single",
 )
 
 # Evaluate.

@@ -30,7 +30,6 @@ class HazardIndicators(IndicatorGroup):
         subcatchment_areas: dict[str, float],
         *,
         rainfall_depth_mm: float = 50.0,
-        sim_duration_hours: float = 1.0,
     ):
         """
         Args:
@@ -42,13 +41,12 @@ class HazardIndicators(IndicatorGroup):
             rainfall_depth_mm: Total rainfall depth over the simulation, mm.
                 Used to derive per-SC reference volume V_ref,s =
                 depth · area · 10 (mm · ha → m³).
-            sim_duration_hours: Simulation duration. Used as T_ref for H1.
         """
         self._sc_names = list(subcatchment_names)
         self._junction_to_sc = dict(junction_to_sc)
         self._areas = dict(subcatchment_areas)
         self._rainfall_depth_mm = float(rainfall_depth_mm)
-        self._sim_duration_hours = max(float(sim_duration_hours), 1e-9)
+        self._sim_duration_hours = 1e-9
 
         # Per-SC V_ref (m³): rainfall_mm · area_ha · 10
         # (1 mm · 1 ha = 10 m³; the 10000 (ha→m²) × 0.001 (mm→m) = 10)
@@ -68,7 +66,6 @@ class HazardIndicators(IndicatorGroup):
     def compute(
         self,
         node_stats: dict[str, dict],
-        sim_duration_hours: float | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Compute H1, H2 per subcatchment and standardize.
 
@@ -90,13 +87,6 @@ class HazardIndicators(IndicatorGroup):
                 (FHI_s itself is computed in FROIComputer after weights
                 are applied — this method stops at standardized indicators.)
         """
-        t_ref = (
-            float(sim_duration_hours)
-            if sim_duration_hours is not None
-            else self._sim_duration_hours
-        )
-        t_ref = max(t_ref, 1e-9)
-
         S = len(self._sc_names)
         h1_raw = np.zeros(S)
         h2_raw = np.zeros(S)
@@ -119,7 +109,7 @@ class HazardIndicators(IndicatorGroup):
                 h1_raw[i] = float(np.mean(durations))
             h2_raw[i] = volume_total
 
-        h1_norm = reference_standardize(h1_raw, reference=t_ref, positive=True)
+        h1_norm = reference_standardize(h1_raw, reference=self._sim_duration_hours, positive=True)
 
         # H2 uses per-SC reference volume, not a scalar.
         h2_norm = np.zeros(S)
@@ -143,3 +133,6 @@ class HazardIndicators(IndicatorGroup):
         ``FHI_s = Σ_m ρ_m · H_m,s``.
         """
         return normalized @ weights
+    
+    def _set_simulation_time(self, sim_duration_hours):
+        self._sim_duration_hours = max(float(sim_duration_hours), 1e-9)

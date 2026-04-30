@@ -2,27 +2,33 @@
 
 Central entry point that the BO-SWMM pipeline calls on every SWMM evaluation.
 
-```python
-from src.kpi.froi import FROIComputer, load_expert_matrices
+## Constructor
 
-froi = FROIComputer(
-    inp_sections,                       # from parse_inp(path)
-    exposure_csv="data/exposure/exposure.csv",
-    vulnerability_csv="data/vulnerability/vulnerability.csv",
-    resilience_csv="data/resilience/resilience_static.csv",
-    expert_matrices=load_expert_matrices({
-        "fhi": "data/weights/expert_fhi.json",
-        "fei": "data/weights/expert_fei.json",
-        "fvi": "data/weights/expert_fvi.json",
-        "fri": "data/weights/expert_fri.json",
-    }),
-    rainfall_depth_mm=20.0,
-    sim_duration_hours=6.0,
-    aggregation_method="simple",        # or "area_weighted"
-)
+```python
+FROIComputer(inp_sections, *, kpi_config=None)
+```
+
+| Parameter | Required | Description |
+|---|---|---|
+| `inp_sections` | Yes | Parsed `.inp` sections (`parse_inp(path)` output). |
+| `kpi_config` | No (kw) | KPI configuration. A parsed dict, a path to a YAML file, or `None` to load the package default (`src/kpi/config.yaml`). |
+
+All indicator data paths, expert matrix paths, rainfall depth, and aggregation
+method are extracted internally from the resolved config.
+
+```python
+from src.kpi.froi import FROIComputer
+from src.scenario.utils.parser import parse_inp
+
+# Default config (loads src/kpi/config.yaml automatically):
+froi = FROIComputer(parse_inp("models/Site_Drainage_Model.inp"))
+
+# Custom config path:
+froi = FROIComputer(parse_inp("models/Site_Drainage_Model.inp"),
+                    kpi_config="custom/kpi_config.yaml")
 
 # Per-evaluation call
-result = froi.evaluate(node_stats, conduit_stats, sim_duration_hours)
+result = froi.evaluate(node_stats)
 ```
 
 ---
@@ -31,15 +37,16 @@ result = froi.evaluate(node_stats, conduit_stats, sim_duration_hours)
 
 `FROIComputer.__init__` performs all the one-off work:
 
-1. Parse the `.inp` for subcatchment order + areas + element properties.
-2. Build the junction-to-SC and conduit-to-SC maps (via `src.kpi.aggregator`).
-3. Instantiate the four indicator groups (`HazardIndicators`, `ExposureIndicators`, `VulnerabilityIndicators`, `ResilienceIndicators`).
-4. Compute weights per group via IFAHP + EWM + preference-coefficient combination (see `weights.md`).
+1. Resolve the KPI config (default or user-provided).
+2. Parse the `.inp` for subcatchment order + areas + element properties.
+3. Build the junction-to-SC and conduit-to-SC maps (via `src.kpi.aggregator`).
+4. Instantiate the four indicator groups (`HazardIndicators`, `ExposureIndicators`, `VulnerabilityIndicators`, `ResilienceIndicators`).
+5. Load expert matrices and compute weights per group via IFAHP + EWM + preference-coefficient combination (see `weights.md`).
 
-`evaluate(node_stats, conduit_stats, sim_duration_hours)` runs on every SWMM evaluation:
+`evaluate(node_stats)` runs on every SWMM evaluation:
 
 ```
-HazardIndicators.compute(node_stats, sim_duration_hours)  -> (S, 2) H_norm
+HazardIndicators.compute(node_stats)                      -> (S, 2) H_norm
 ExposureIndicators.compute()                              -> (S, 4) E_norm (cached)
 VulnerabilityIndicators.compute()                         -> (S, 3) V_norm (cached)
 ResilienceIndicators.compute()                            -> (S, 3) R_norm (cached)

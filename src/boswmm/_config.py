@@ -7,6 +7,7 @@ structure is documented in that file; top-level sections include
 
 A user-supplied ``config`` dict (same shape) can override at runtime.
 """
+from __future__ import annotations
 
 import os
 import yaml
@@ -21,6 +22,16 @@ def load_default_config() -> dict:
         return yaml.safe_load(f)
 
 
-def resolve_config(user_config: dict | None) -> dict:
-    """Return ``user_config`` if provided, otherwise the default config."""
-    return user_config if user_config is not None else load_default_config()
+def resolve_config(config: dict | str | None = None) -> dict:
+    """Resolve a config from a dict, a YAML file path, or ``None`` (default).
+
+    Args:
+        config: A parsed config dict, a path to a YAML file, or ``None``
+            to load the package default.
+    """
+    if config is None:
+        return load_default_config()
+    if isinstance(config, str):
+        with open(config, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    return config
