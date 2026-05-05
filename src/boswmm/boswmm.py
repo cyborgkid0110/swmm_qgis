@@ -171,7 +171,7 @@ class BOSWMM:
 
             print(f"  Evaluating {new_X.shape[0]} new candidates via SWMM...")
             new_Y, new_results = self._evaluate(new_X)
-
+            print(f"  Updating dataset")
             # Update dataset
             train_X = torch.cat([train_X, new_X])
             train_Y = torch.cat([train_Y, new_Y])
@@ -272,7 +272,8 @@ class BOSWMM:
             path = self._input.build_scenario(X[i], scenario_id=self._scenario_counter)
             paths.append(path)
             self._scenario_counter += 1
-
+        
+        print(f"  [LOG] Batch evaluating")
         results = self._kpi_eval.evaluate_batch(paths)
 
         # Clean up temporary scenario files (.inp, .rpt, .out) after evaluation

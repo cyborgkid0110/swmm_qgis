@@ -99,8 +99,11 @@ class AcquisitionFunction(ABC):
 
         Returns a tensor of shape ``(batch_size, N)`` with candidate points.
         """
+        print(f"  [LOG] Fitting surrogate model")
         model = self.fit_surrogate(train_X, train_Y)
+        print(f"  [LOG] build acquistion function")
         acqf = self.build_acqf(model, train_Y)
+        print(f"  [LOG] Optimizing")
         candidate, _ = optimize_acqf(
             acq_function=acqf,
             bounds=self._bounds,
