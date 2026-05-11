@@ -1,8 +1,8 @@
-"""Step 1 — InputqEHVISWMM.
+"""Step 1 — Input.
 
 Thin facade that keeps the public API stable while delegating scenario
 construction to :class:`src.scenario.ScenarioBuilder`. Use this when you want
-the qEHVI-SWMM pipeline's Step 1 entry point; the underlying builder is
+the BO-SWMM pipeline's Step 1 entry point; the underlying builder is
 available via ``inp.scenario_builder`` if callers need richer access.
 """
 
@@ -13,8 +13,8 @@ import torch
 from src.scenario import ScenarioBuilder
 
 
-class InputqEHVISWMM:
-    """Step 1 of the qEHVI-SWMM pipeline — load base model + produce scenarios.
+class Input:
+    """Step 1 of the BO-SWMM pipeline — load base model + produce scenarios.
 
     Decision variable ``x ∈ R^N`` with ``x[i] ∈ [0, v_max[i]]``:
         x[i] = 0           -> no maintenance at conduit i

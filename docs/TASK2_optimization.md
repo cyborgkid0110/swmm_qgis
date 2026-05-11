@@ -151,14 +151,14 @@ src/
 │       └── combined.py        # preference-coefficient combination
 │
 └── boswmm/                    # Bayesian-optimization pipeline (Steps 1-4)
-    ├── __init__.py            # exports BOSWMM, InputqEHVISWMM, KPIEvaluation, Output
+    ├── __init__.py            # exports BOSWMM, Input, KPIEvaluation, Output
     ├── _config.py             # config loader
     ├── config.yaml            # BO hyperparameters + optimization.mode
-    ├── input.py               # InputqEHVISWMM   — Step 1 facade over ScenarioBuilder
+    ├── input.py               # Input   — Step 1 facade over ScenarioBuilder
     ├── kpi_evaluation.py      # KPIEvaluation    — Step 2: SWMM runner + FROIComputer delegate
     ├── acquisition.py         # AcquisitionFunction ABC + EIAcquisition + EHVIAcquisition
     ├── boswmm.py              # BOSWMM          — Step 3: mode-agnostic BO loop
-    └── output.py              # OutputqEHVISWMM — Step 4: mode-aware JSON report + visualization
+    └── output.py              # Output — Step 4: mode-aware JSON report + visualization
 ```
 
 `ScenarioBuilder` and `ScenarioExtractor` are mutually independent — see `docs/boswmm/scenario_module.md`. `FROIComputer` is called by `KPIEvaluation` on every SWMM evaluation — see `docs/kpi/froi.md`.
@@ -167,7 +167,7 @@ src/
 
 ### Class Responsibilities
 
-#### `InputqEHVISWMM` — Step 1: Input Data
+#### `Input` — Step 1: Input Data
 
 | Responsibility | Detail |
 |---|---|
@@ -212,7 +212,7 @@ src/
 | Convergence check | Stop if the acquisition strategy's progress metric has not improved for `patience` iterations (disabled when `patience: -1`) |
 | Cleanup | Delete scenario `.inp`/`.rpt`/`.out` after each iteration |
 
-#### `OutputqEHVISWMM` (aliased `Output`) — Step 4: Output Data
+#### `Output` (aliased `Output`) — Step 4: Output Data
 
 | Responsibility | Detail |
 |---|---|
@@ -288,7 +288,7 @@ The optimization produces a **JSON report** containing all Pareto-optimal soluti
 
 - [x] Build HTML algorithm flowchart (Sub-Task 1) → `docs/optimization/flowchart.html`
 - [x] Define decision variable and output JSON format, flowchart revision
-- [x] Implement `InputqEHVISWMM` class (Step 1: scenario loading + .inp modification)
+- [x] Implement `Input` class (Step 1: scenario loading + .inp modification)
 - [x] Implement `KPIEvaluation` class (Step 2: SWMM execution + KPI packaging)
 - [x] Implement BO loop class (Step 3: was `qEHVISWMM`, now `BOSWMM` with mode support)
 - [x] Implement `Output` class (Step 4: Pareto / best-solution extraction + JSON report)

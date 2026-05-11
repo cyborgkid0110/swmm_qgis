@@ -8,9 +8,6 @@ Mode-aware output:
     full KPI vector ``[FHI, FEI, FVI, 1-FRI]`` and its sub-index breakdown.
     Visualization = pairwise 2D projections (6 pairs for 4 objectives) +
     Pareto solutions table.
-
-The class name is preserved as ``OutputqEHVISWMM`` for internal callers;
-``src.boswmm.__init__`` re-exports it as ``Output``.
 """
 
 import itertools
@@ -28,7 +25,7 @@ _MULTI_OBJ_LABELS = ["FHI", "FEI", "FVI", "1-FRI"]
 _SINGLE_OBJ_LABELS = ["FROI"]
 
 
-class OutputqEHVISWMM:
+class Output:
     """Solution extraction, JSON report, and visualization."""
 
     # ------------------------------------------------------------------
@@ -125,10 +122,10 @@ class OutputqEHVISWMM:
         mode = report.get("mode", "multi")
 
         if mode == "single":
-            return OutputqEHVISWMM._visualize_single(
+            return Output._visualize_single(
                 train_Y, progress_history, report, output_dir
             )
-        return OutputqEHVISWMM._visualize_multi(
+        return Output._visualize_multi(
             train_Y, progress_history, report, output_dir
         )
 

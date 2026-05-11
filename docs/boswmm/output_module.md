@@ -1,12 +1,12 @@
 # Output — Step 4: Solution Extraction, JSON Report, Visualization
 
-**Source:** `src/boswmm/output.py` (class name kept as `OutputqEHVISWMM`; re-exported as `Output` from `src.boswmm`)
+**Source:** `src/boswmm/output.py`
 
 ---
 
 ## Purpose
 
-`OutputqEHVISWMM` owns everything downstream of the BO loop:
+`Output` owns everything downstream of the BO loop:
 
 1. Filter non-dominated solutions from `train_Y` (multi-mode) or pick the argmin (single-mode).
 2. Write a mode-aware JSON report.

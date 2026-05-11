@@ -11,9 +11,9 @@ import torch
 
 from ._config import resolve_config
 from .acquisition import make_acquisition
-from .input import InputqEHVISWMM
+from .input import Input
 from .kpi_evaluation import KPIEvaluation
-from .output import OutputqEHVISWMM
+from .output import Output
 
 
 class BOSWMM:
@@ -29,7 +29,7 @@ class BOSWMM:
 
     Loop:
         1. Generate initial continuous samples via Sobol + rejection (budget).
-        2. Evaluate via SWMM (InputqEHVISWMM + KPIEvaluation).
+        2. Evaluate via SWMM (Input + KPIEvaluation).
         3. Fit GP surrogate via the acquisition strategy.
         4. Optimize the acquisition function with budget inequality constraint.
         5. Evaluate candidates (no discretization).
@@ -41,13 +41,13 @@ class BOSWMM:
 
     def __init__(
         self,
-        input_module: InputqEHVISWMM,
+        input_module: Input,
         kpi_evaluator: KPIEvaluation,
         config: dict | None = None,
     ):
         """
         Args:
-            input_module: Initialized :class:`InputqEHVISWMM`.
+            input_module: Initialized :class:`Input`.
             kpi_evaluator: Initialized :class:`KPIEvaluation`. Its ``mode``
                 property must match the BO mode in the config.
             config: Optional config dict overriding ``src/boswmm/config.yaml``.
@@ -221,7 +221,7 @@ class BOSWMM:
 
         # --- Step 3: Extract solutions and generate report ---
         if self._mode == "multi":
-            solution_X, solution_Y, solution_indices = OutputqEHVISWMM.extract_pareto(
+            solution_X, solution_Y, solution_indices = Output.extract_pareto(
                 train_X, train_Y
             )
             solution_results = [all_results[i] for i in solution_indices]
@@ -235,7 +235,7 @@ class BOSWMM:
             print(f"Best single-objective solution at index {best_idx}, "
                   f"kpi={train_Y[best_idx].tolist()}")
 
-        report_path = OutputqEHVISWMM.generate_report(
+        report_path = Output.generate_report(
             pareto_X=solution_X,
             pareto_results=solution_results,
             conduit_names=self._input.conduit_names,

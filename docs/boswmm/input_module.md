@@ -1,4 +1,4 @@
-# InputqEHVISWMM — Step 1: Scenario Loading & .inp Modification
+# Input — Step 1: Scenario Loading & .inp Modification
 
 **Source:** `src/boswmm/input.py`
 
@@ -6,9 +6,9 @@
 
 ## Purpose
 
-`InputqEHVISWMM` is the entry point of the BO-SWMM optimization pipeline. It loads a pre-existing EPA SWMM hydraulic model (`.inp` file), configures sedimentation monitoring points, and produces modified `.inp` files for any continuous maintenance-volume decision vector `x`.
+`Input` is the entry point of the BO-SWMM optimization pipeline. It loads a pre-existing EPA SWMM hydraulic model (`.inp` file), configures sedimentation monitoring points, and produces modified `.inp` files for any continuous maintenance-volume decision vector `x`.
 
-Internally, `InputqEHVISWMM` is a thin facade over `src.scenario.ScenarioBuilder`, which owns all `.inp` mutation logic. Callers that need richer access to the builder can obtain it via `inp.scenario_builder`.
+Internally, `Input` is a thin facade over `src.scenario.ScenarioBuilder`, which owns all `.inp` mutation logic. Callers that need richer access to the builder can obtain it via `inp.scenario_builder`.
 
 ---
 
@@ -31,7 +31,7 @@ The mapping between vector index `i` and physical conduit name is defined by the
 ## Constructor
 
 ```python
-InputqEHVISWMM(
+Input(
     base_inp_path: str,
     sedimentation_csv: str,
     rainfall_csv: str | None = None,
@@ -215,10 +215,10 @@ This avoids redundant rainfall/discharge processing and geometry parsing when ge
 
 ```python
 import torch
-from src.boswmm import InputqEHVISWMM
+from src.boswmm import Input
 
 # Initialize with base model and sedimentation config
-inp = InputqEHVISWMM(
+inp = Input(
     base_inp_path="models/Site_Drainage_Model.inp",
     sedimentation_csv="data/sedimentation.csv",
     output_dir="output/scenarios",

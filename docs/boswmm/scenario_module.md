@@ -6,7 +6,7 @@
 
 ## Purpose
 
-The `src.scenario` package is the single home for every operation that reads or writes SWMM `.inp` scenario files. The BO-SWMM pipeline classes (`InputqEHVISWMM`, `KPIEvaluation`) delegate to this package so that scenario semantics are not duplicated across Step 1 and Step 2.
+The `src.scenario` package is the single home for every operation that reads or writes SWMM `.inp` scenario files. The BO-SWMM pipeline classes (`Input`, `KPIEvaluation`) delegate to this package so that scenario semantics are not duplicated across Step 1 and Step 2.
 
 Two public classes, intentionally independent of each other:
 

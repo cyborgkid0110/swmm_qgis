@@ -15,15 +15,13 @@
 
 The mode is selected via `optimization.mode` in `config.yaml`. Everything that differs between the two modes (GP topology, acquisition function, progress metric) is encapsulated in the `AcquisitionFunction` strategy class (see `acquisition_module.md`).
 
-The class name `qEHVISWMM` is kept as a back-compat alias for legacy imports.
-
 ---
 
 ## Constructor
 
 ```python
 BOSWMM(
-    input_module: InputqEHVISWMM,
+    input_module: Input,
     kpi_evaluator: KPIEvaluation,
     config: dict | None = None,
 )
@@ -31,7 +29,7 @@ BOSWMM(
 
 | Parameter | Required | Description |
 |---|---|---|
-| `input_module` | Yes | Initialized `InputqEHVISWMM` (Step 1). Provides decision-variable bounds via `v_max`. |
+| `input_module` | Yes | Initialized `Input` (Step 1). Provides decision-variable bounds via `v_max`. |
 | `kpi_evaluator` | Yes | Initialized `KPIEvaluation` (Step 2). Its `.mode` must match `config.optimization.mode` — otherwise the constructor raises. |
 | `config` | No | Config dict overriding `config.yaml`. Must contain `optimization` and `constraints`. |
 
@@ -71,7 +69,7 @@ result = optimizer.run(output_path="output/report.json")
 
 Scaled Sobol draws in `[0, v_max]^N` are rejected if `Σ x > A`, repeating until `n_init` vectors are accepted (cap: 1000 × `n_init` attempts). If acceptance fails, the method raises with the actual `A`, `Σ v_max`, and attempt count.
 
-Each accepted sample is realized as a scenario `.inp` via `InputqEHVISWMM.build_scenario`, then scored via `KPIEvaluation.evaluate_batch`. The result populates `train_X`, `train_Y`.
+Each accepted sample is realized as a scenario `.inp` via `Input.build_scenario`, then scored via `KPIEvaluation.evaluate_batch`. The result populates `train_X`, `train_Y`.
 
 ### Step 3.2 — BO Iteration (up to `max_iter` times)
 
@@ -166,12 +164,12 @@ Set `patience: -1` to disable early stopping and always run `max_iter`.
 ## Usage Example
 
 ```python
-from src.boswmm import BOSWMM, InputqEHVISWMM, KPIEvaluation
+from src.boswmm import BOSWMM, Input, KPIEvaluation
 
 BASE_INP = "models/Site_Drainage_Model.inp"
 
 # Step 1: scenario input
-inp = InputqEHVISWMM(
+inp = Input(
     base_inp_path=BASE_INP,
     sedimentation_csv="data/sedimentation.csv",
     output_dir="output/scenarios",
@@ -196,4 +194,4 @@ print(f"Mode={result['mode']}, iterations={result['n_iterations']}, "
 - `botorch` — `SingleTaskGP`, `ModelListGP`, acquisitions, `optimize_acqf`, `NondominatedPartitioning`, `Hypervolume`, `is_non_dominated`
 - `gpytorch` — `ExactMarginalLogLikelihood`, `SumMarginalLogLikelihood`
 - `pyyaml` — config loading
-- Reuses: `InputqEHVISWMM`, `KPIEvaluation`, `Output` (aliased from `OutputqEHVISWMM`), `AcquisitionFunction`
+- Reuses: `Input`, `KPIEvaluation`, `Output`, `AcquisitionFunction`

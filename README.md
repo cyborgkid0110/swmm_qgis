@@ -65,7 +65,7 @@ swmm_qgis/
 │   │   └── utils/                      # parser.py (syntax) + geometry.py (segment area)
 │   ├── qehvi_swmm/                 # Optimization pipeline (Task 2)
 │   │   ├── config.yaml                 # Default config: kpi / bo / constraints sections
-│   │   ├── input.py                    # Step 1: InputqEHVISWMM facade over ScenarioBuilder
+│   │   ├── input.py                    # Step 1: Input facade over ScenarioBuilder
 │   │   ├── kpi_evaluation.py           # Step 2: SWMM execution + KPI computation
 │   │   ├── qehvi_swmm.py               # Step 3: BO loop (GP + qEHVI + Pareto update)
 │   │   └── output.py                   # Step 4: Pareto extraction + JSON report + visualization
