@@ -1,7 +1,7 @@
 """End-to-end test of the BO-SWMM optimization pipeline."""
 import os
 
-from src.boswmm import BOSWMM, InputqEHVISWMM, KPIEvaluation
+from src.boswmm import BOSWMM, Input, KPIEvaluation
 
 # Create test sedimentation CSV
 os.makedirs("temp_data", exist_ok=True)
@@ -12,7 +12,7 @@ with open("temp_data/sed.csv", "w") as f:
 BASE_INP = "models/Site_Drainage_Model.inp"
 
 # Step 1: Input (scenario builder)
-inp = InputqEHVISWMM(
+inp = Input(
     base_inp_path=BASE_INP,
     sedimentation_csv="temp_data/sed.csv",
     output_dir="temp_data/scenarios",
