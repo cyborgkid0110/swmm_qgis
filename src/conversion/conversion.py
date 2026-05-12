@@ -211,10 +211,14 @@ class Conversion:
     # =========================================================
 
     def _load_dem(self):
-        """Open DEM raster and cache band/geotransform for point sampling."""
+        """Open DEM raster and cache band/geotransform for point sampling.
+
+        If the DEM CRS differs from EPSG:4326, a coordinate transform is
+        built so _sample_dem can accept WGS84 (lon, lat) inputs.
+        """
         if not self.dem_path or not os.path.exists(self.dem_path):
             return
-        from osgeo import gdal
+        from osgeo import gdal, osr
         ds = gdal.Open(self.dem_path)
         if not ds:
             print(f"  WARNING: cannot open DEM {self.dem_path}")
@@ -223,16 +227,33 @@ class Conversion:
         self._dem_gt = ds.GetGeoTransform()
         self._dem_band = ds.GetRasterBand(1)
         self._dem_nodata = self._dem_band.GetNoDataValue()
-        print(f"  DEM loaded: {ds.RasterXSize}x{ds.RasterYSize} pixels")
+
+        self._dem_ct = None
+        dem_srs = osr.SpatialReference()
+        dem_srs.ImportFromWkt(ds.GetProjection())
+        wgs84 = osr.SpatialReference()
+        wgs84.ImportFromEPSG(4326)
+        wgs84.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        dem_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        if not dem_srs.IsSame(wgs84):
+            self._dem_ct = osr.CoordinateTransformation(wgs84, dem_srs)
+            print(f"  DEM loaded: {ds.RasterXSize}x{ds.RasterYSize} pixels "
+                  f"(CRS: EPSG:{dem_srs.GetAttrValue('AUTHORITY', 1)}, "
+                  f"reprojecting from WGS84)")
+        else:
+            print(f"  DEM loaded: {ds.RasterXSize}x{ds.RasterYSize} pixels")
 
     def _sample_dem(self, lon, lat):
-        """Return ground-surface elevation (m) at (lon, lat), or None."""
+        """Return ground-surface elevation (m) at WGS84 (lon, lat), or None."""
         if self._dem_band is None:
             return None
         import math
+        x, y = lon, lat
+        if self._dem_ct is not None:
+            x, y, _ = self._dem_ct.TransformPoint(lon, lat)
         gt = self._dem_gt
-        px = int((lon - gt[0]) / gt[1])
-        py = int((lat - gt[3]) / gt[5])
+        px = int((x - gt[0]) / gt[1])
+        py = int((y - gt[3]) / gt[5])
         if px < 0 or py < 0 or px >= self._dem_ds.RasterXSize or py >= self._dem_ds.RasterYSize:
             return None
         val = self._dem_band.ReadAsArray(px, py, 1, 1)
@@ -911,7 +932,7 @@ class Conversion:
                 geom1 = self._safe_float(diam_mm) / 1000.0
                 geom2 = 0.0
             elif xs_type == "RECT_CLOSED" and size_mm:
-                parts = str(size_mm).split("x")
+                parts = str(size_mm).lower().split("x")
                 geom1 = self._safe_float(parts[0]) / 1000.0
                 geom2 = self._safe_float(parts[1]) / 1000.0 if len(parts) > 1 else geom1
             else:
@@ -1003,19 +1024,11 @@ class Conversion:
             pump_id = row.get("ID", "0")
             source_name = row.get("Source", "").strip()
 
-            # FromNode: lake position if Source specified
+            # FromNode: storage node if Source matches a lake name
             lake_info = lake_index.get(source_name.lower()) if source_name else None
             if lake_info:
-                from_node = self._get_or_create_junction(
-                    coord_registry, lake_info["lon"], lake_info["lat"],
-                    f"LK_{lake_info['name']}",
-                    elevation=lake_info["bed_elev"],
-                    max_depth=lake_info["bank_elev"] - lake_info["bed_elev"])
+                from_node = lake_info["name"]
                 from_lon, from_lat = lake_info["lon"], lake_info["lat"]
-                fkey = (round(from_lon, 6), round(from_lat, 6))
-                auto_junctions.append((from_node, from_lon, from_lat,
-                                       coord_registry[fkey]["elevation"],
-                                       coord_registry[fkey]["max_depth"]))
                 print(f"    Pump {row.get('Name','?')}: Source={source_name} -> {from_node}")
             else:
                 from_node = self._swmm_name(f"PN{pump_id}_in")
@@ -1112,12 +1125,8 @@ class Conversion:
             if receiver:
                 lake_info = lake_index.get(receiver.lower())
                 if lake_info:
-                    # Receiver is a lake — use lake junction
-                    to_node = self._get_or_create_junction(
-                        coord_registry, lake_info["lon"], lake_info["lat"],
-                        f"LK_{lake_info['name']}",
-                        elevation=lake_info["bed_elev"],
-                        max_depth=lake_info["bank_elev"] - lake_info["bed_elev"])
+                    # Receiver is a lake — connect directly to storage node
+                    to_node = lake_info["name"]
                     to_lon, to_lat = lake_info["lon"], lake_info["lat"]
                     is_lake_target = True
                     print(f"    Orifice {orifice_name}: -> Lake {receiver}")
@@ -1210,9 +1219,10 @@ class Conversion:
             tkey = (round(to_lon, 6), round(to_lat, 6))
             if tkey not in coord_registry:
                 coord_registry[tkey] = {"name": to_node, "elevation": 0.0, "max_depth": 3.0}
-            auto_junctions.append((to_node, to_lon, to_lat,
-                                   coord_registry[tkey]["elevation"],
-                                   coord_registry[tkey]["max_depth"]))
+            if not is_lake_target:
+                auto_junctions.append((to_node, to_lon, to_lat,
+                                       coord_registry[tkey]["elevation"],
+                                       coord_registry[tkey]["max_depth"]))
 
             height = self._safe_float(row.get("Height_m"), 0.0)
             width = self._safe_float(row.get("Width_m"), 0.0)
